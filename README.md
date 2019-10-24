@@ -1,15 +1,13 @@
 
-#java2llvm
+# java2llvm
+
 An Example Project Show Convert Java Byte Code to LLVM IR assembler , compile standalone executable file
 
-This project is based on [class2ir](https://github.com/MParygin/class2ir)
-
-Class2ir look like based on an old llvm version, it can't running on greate than llvm 3.9.
-So i changed some instruct syntex, and repair bug.
-The class2ir can print number on console.
+This project is based on [class2ir](https://github.com/MParygin/class2ir), it based on an old llvm version.
+So i changed some instruct syntex, and repaired bug, enhanced functionly.
 
 Currently:
-Tested CentOS x64 executable file.
+Tested CentOS x64 executable file, and say "Hello world".
 
 Make:
 1. Enter directory java2llvm/
