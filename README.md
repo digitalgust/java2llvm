@@ -14,8 +14,9 @@ Make:
 2. Run build.sh, then you will get app.exe here.
 
 Request:
-java
-llvm / clang
+CentOS 7.0 x86_64
+java 1.8
+llvm-as / llc / clang  5.0
 make
 
 Known issue:
