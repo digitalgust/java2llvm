@@ -2,24 +2,29 @@
 #java2llvm
 An Example Project Show Convert Java Byte Code to LLVM IR assembler , compile standalone executable file
 
-This project is baseed on [class2ir](https://github.com/MParygin/class2ir)
+This project is based on [class2ir](https://github.com/MParygin/class2ir)
 
 Class2ir look like based on an old llvm version, it can't running on greate than llvm 3.9.
 So i changed some instruct syntex, and repair bug.
 The class2ir can print number on console.
 
 Currently:
-Can generte linux x64 executable file.
+Tested CentOS x64 executable file.
 
 Make:
-1. Enter directory java2exe/
-2. Run java -jar target/
+1. Enter directory java2llvm/
+2. Run build.sh, then you will get app.exe here.
+
+Request:
+java
+llvm / clang
+make
 
 Known issue:
 1. No GC.
-2. May be some of java instruction can't work, need test
-3. some of java instruction no convertion, see MV.java
-
+2. Maybe some of java instruction can't work, need test
+3. some of java instruction not implementation , see MV.java
+4. Object memory allocation 
 
 change log:
 1. Add base class java.lang.*, java.io.PrintStream
