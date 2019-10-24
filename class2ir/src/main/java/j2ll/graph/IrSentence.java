@@ -24,6 +24,7 @@ abstract public class IrSentence extends IrObject {
     public static final int ARITH = 12;//add sub mul div
 
     protected String line;
+    protected String comment;
     protected String instName;
     protected int index;
     protected int stackSize;
@@ -47,8 +48,13 @@ abstract public class IrSentence extends IrObject {
     abstract public void replaceVarName(IrVariable old, IrVariable newv);
 
     static public IrSentence parseInst(String str) {
-
-        String s = str.indexOf(';') >= 0 ? str.substring(0, str.indexOf(';')) : str;
+        String s = str;
+        String c = "";
+        int pos = str.indexOf(';');
+        if (pos >= 0) {
+            s = str.substring(0, pos);
+            c = str.substring(pos);
+        }
         s = s.trim();
         String right = s;
 
@@ -117,6 +123,7 @@ abstract public class IrSentence extends IrObject {
             System.out.println("unknow :" + s);
         }
         irs.line = s;
+        irs.comment = c;
         return irs;
     }
 
@@ -125,8 +132,8 @@ abstract public class IrSentence extends IrObject {
      * split code line ,
      * ex:   %__tmpc6 = bitcast {i32, {i32, [0 x i16]}*, i32, i32}* %stack1 to {i32, [0 x i16]}*
      * the "{i32, {i32, [0 x i16]}*, i32, i32}*" and "{i32, [0 x i16]}*" as a whole entry
-     *
-     *  the method can process 2 level '{{}}'
+     * <p>
+     * the method can process 2 level '{{}}'
      *
      * @param s
      * @param regex
@@ -174,6 +181,6 @@ abstract public class IrSentence extends IrObject {
         for (int i = 0; i < deep; i++) {
             space += "    ";
         }
-        return space + line + "\n";
+        return space + line + comment + "\n";
     }
 }

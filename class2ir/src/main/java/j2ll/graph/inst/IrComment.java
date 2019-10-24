@@ -4,7 +4,6 @@ import j2ll.graph.IrSentence;
 import j2ll.graph.IrVariable;
 
 public class IrComment extends IrSentence {
-    public String comment;
 
     {
         instType = COMMENT;

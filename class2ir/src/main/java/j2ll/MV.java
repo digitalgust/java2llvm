@@ -171,33 +171,36 @@ public class MV extends MethodVisitor {
     @Override
     public void visitFrame(int type, int numLocal, Object[] local, int numStack, Object[] stackitems) {
         //out.add("; TODO FRame: " + i + " " + i1 + " " + i2);
-        out.add("; type " + type + ", local " + numLocal + " " + Arrays.toString(local) + "," + " stack " + numStack + " " + Arrays.toString(stackitems));
+        //out.add("; type " + type + ", local " + numLocal + " " + Arrays.toString(local) + "," + " stack " + numStack + " " + Arrays.toString(stackitems));
         vars.activeByFrame(type, numLocal, local);
 
         switch (type) {
-            case jdk.internal.org.objectweb.asm.Opcodes.F_APPEND: { //1
+            case org.objectweb.asm.Opcodes.F_APPEND: { //1
 
                 break;
             }
-            case jdk.internal.org.objectweb.asm.Opcodes.F_CHOP: {//2
+            case org.objectweb.asm.Opcodes.F_CHOP: {//2
 
                 break;
             }
-            case jdk.internal.org.objectweb.asm.Opcodes.F_FULL: {//0
+            case org.objectweb.asm.Opcodes.F_FULL: {//0
                 //System.out.println("expect:" + numStack + "  real:" + stack.size());
-                while (stack.size() > numStack) stack.pop();
+                while (stack.size() > numStack) {
+                    StackValue sv = stack.pop();
+                    out.add(";pop a var from stack NEED FIX :" + sv.fullName());
+                }
                 if (stack.size() < numStack) {
                     throw new RuntimeException("todo gust");
                 }
                 break;
             }
-            case jdk.internal.org.objectweb.asm.Opcodes.F_NEW: {//-1
+            case org.objectweb.asm.Opcodes.F_NEW: {//-1
                 break;
             }
-            case jdk.internal.org.objectweb.asm.Opcodes.F_SAME: {//3
+            case org.objectweb.asm.Opcodes.F_SAME: {//3
                 break;
             }
-            case jdk.internal.org.objectweb.asm.Opcodes.F_SAME1: {//4
+            case org.objectweb.asm.Opcodes.F_SAME1: {//4
                 break;
             }
             default: {
@@ -1115,7 +1118,7 @@ public class MV extends MethodVisitor {
         result = ms.split("\n");
         discardDoubleLabel(result);
 
-        IrFunction irf = new IrFunction();
+        IrFunction irf = new IrFunction(cv.className, methodName, javaSignature);
         irf.define = define;
         irf.end = "}";
         irf.parse(result);

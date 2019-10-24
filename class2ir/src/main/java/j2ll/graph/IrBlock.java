@@ -7,85 +7,58 @@ import java.util.*;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 public class IrBlock extends IrObject {
+    public IrFunction func;
     int index;
-    IrBlock first = null;
-    List<IrObject> lines = new CopyOnWriteArrayList<>();
+    List<IrSentence> lines = new CopyOnWriteArrayList<>();
+
     //
     List<IrBlock> inner = new ArrayList<>();
     List<IrBlock> outer = new ArrayList<>();
 
-    //lefts
     List<IrVariable> operandNeed = new ArrayList<>();
     List<IrVariable> operandRemain = new ArrayList<>();
-    Set<IrVariable> stackVars = new LinkedHashSet<>();//left stack var
 
-
-    public IrBlock() {
+    public IrBlock(IrFunction irf) {
+        func = irf;
     }
 
-    public void parse(SourceToken st) {
-        int id = 0;
-        IrBlock irb = null;
-        for (st.pos = 0; st.pos < st.code.size(); st.pos++) {
-            IrSentence irs = st.code.get(st.pos);
-            switch (irs.getInstType()) {
-                case IrSentence.LABEL: {
-                    lines.add(irs);
-                    irb = new IrBlock();
-                    lines.add(irb);
-                    irb.index = id;
-                    id++;
-                    break;
-                }
-                default: {
-                    if (irb == null) throw new RuntimeException("irb can't null");
-                    irb.lines.add(irs);
-                }
-            }
-        }
 
+    void iteratorForward(IrBlock block, IrBlock stop, List<IrBlock> curPath, List<List<IrBlock>> allPaths) {
 
-        //find graph path
-        for (IrObject b : lines) {
-            if (b instanceof IrBlock) {
-                IrBlock ib = ((IrBlock) b);
-                if (first == null) first = ib;
-
-                ib.fintOuter(this);
-                ib.findOperandCreatedByOther(this);
-                ib.fixOperandNeeds(this);
-
-            }
-        }
-
-        //for debug, print execute path ,may be lots of path
-        if (false) {
-            List<List<IrBlock>> paths = new ArrayList<>();
-            List<IrBlock> cur = new ArrayList<>();
-            iteratorTree(first, cur, paths);
-
-            for (List<IrBlock> list : paths) {
-                for (IrBlock ib : list) {
-                    System.out.print(ib + " -> ");
-                }
-                System.out.println();
-            }
-        }
-    }
-
-    void iteratorTree(IrBlock block, List<IrBlock> cur, List<List<IrBlock>> paths) {
-
-        if (count(cur, this) > 1) {// while follow stream
+        if (count(curPath, this) > 1) {// while follow stream
             return;
         }
-        cur.add(this);
+        curPath.add(this);
+        if (this == stop) {
+            return;
+        }
         if (block.outer.isEmpty()) {
-            paths.add(cur);
+            allPaths.add(curPath);
         } else {
             for (IrBlock irb : block.outer) {
                 List<IrBlock> list = new ArrayList<>();
-                list.addAll(cur);
-                irb.iteratorTree(irb, list, paths);
+                list.addAll(curPath);
+                irb.iteratorForward(irb, stop, list, allPaths);
+            }
+        }
+    }
+
+    void iteratorBackward(IrBlock block, IrBlock stop, List<IrBlock> curPath, List<List<IrBlock>> allPaths) {
+
+        if (count(curPath, this) > 1) {// while follow stream
+            return;
+        }
+        curPath.add(this);
+        if (this == stop) {
+            return;
+        }
+        if (block.inner.isEmpty()) {
+            allPaths.add(curPath);
+        } else {
+            for (IrBlock irb : block.inner) {
+                List<IrBlock> list = new ArrayList<>();
+                list.addAll(curPath);
+                irb.iteratorBackward(irb, stop, list, allPaths);
             }
         }
     }
@@ -100,7 +73,7 @@ public class IrBlock extends IrObject {
         return c;
     }
 
-    void fintOuter(IrBlock top) {
+    void fintOuter() {
         for (IrObject irb : lines) {
             if (irb instanceof IrSentence) {
                 IrSentence irs = (IrSentence) irb;
@@ -110,12 +83,12 @@ public class IrBlock extends IrObject {
                     }
                     case IrSentence.BR2: {
                         IrBranch2 ibr2 = (IrBranch2) irs;
-                        IrBlock b1 = findBlock(top, ibr2.lab1);
+                        IrBlock b1 = func.findBlock(ibr2.lab1);
                         if (b1 != null) {
                             outer.add(b1);
                             b1.inner.add(this);
                         }
-                        IrBlock b2 = findBlock(top, ibr2.lab2);
+                        IrBlock b2 = func.findBlock(ibr2.lab2);
                         if (b2 != null) {
                             outer.add(b2);
                             b2.inner.add(this);
@@ -124,7 +97,7 @@ public class IrBlock extends IrObject {
                     }
                     case IrSentence.BR1: {
                         IrBranch1 ibr1 = (IrBranch1) irs;
-                        IrBlock b1 = findBlock(top, ibr1.label);
+                        IrBlock b1 = func.findBlock(ibr1.label);
                         if (b1 != null) {
                             outer.add(b1);
                             b1.inner.add(this);
@@ -139,40 +112,11 @@ public class IrBlock extends IrObject {
         }
     }
 
-    IrBlock findBlock(IrBlock top, String lab) {
-        boolean found = false;
-        for (IrObject irb : top.lines) {
-            if (irb instanceof IrSentence) {
-                IrSentence irs = (IrSentence) irb;
-                if (irs.getInstType() == IrSentence.LABEL) {
-                    if (((IrLabel) irs).label.equals(lab)) {
-                        found = true;
-                        continue;
-                    }
-                }
-            }
-            if (found) {
-                return (IrBlock) irb;
-            }
-        }
-        return null;
-    }
 
-    public String toString() {
-        return "" + index;
-    }
-
-    public String toString(int deep) {
-        String s = "";
-
-        for (IrObject irb : lines) {
-            s += irb.toString(deep + 1);
-        }
-        return ";" + index + "\n" + s;
-    }
-
-
-    public void findOperandCreatedByOther(IrBlock top) {
+    /**
+     * find this block register(%stack16) used but created by other block
+     */
+    public void findOperandCreatedByOther() {
         Set<IrVariable> lefts = new LinkedHashSet<>();//left register var
 
         Set<IrVariable> operands = new LinkedHashSet<>();//right register var
@@ -217,7 +161,7 @@ public class IrBlock extends IrObject {
                     }
                     case IrSentence.ALLOCA: {
                         IrAlloca ir = (IrAlloca) irs;
-                        top.stackVars.add(ir.left);
+                        func.stackVars.add(ir.left);
                         break;
                     }
                     case IrSentence.ICMP: {
@@ -263,14 +207,14 @@ public class IrBlock extends IrObject {
                 }
             }
         }
-        //remove imm operand
+        //remove imm operand in lefts
         for (Iterator<IrVariable> it = lefts.iterator(); it.hasNext(); ) {
             IrVariable s = it.next();
             if (s.name == null || !s.name.startsWith("%")) {
                 it.remove();
             }
         }
-
+        //remove imm operand in operands
         for (Iterator<IrVariable> it = operands.iterator(); it.hasNext(); ) {
             IrVariable s = it.next();
             if (s.name == null || !s.name.startsWith("%")) {
@@ -282,11 +226,11 @@ public class IrBlock extends IrObject {
         Set<IrVariable> tmp = new LinkedHashSet<>();
         tmp.addAll(operands);
         tmp.removeAll(lefts);
-        tmp.removeAll(top.stackVars);
+        tmp.removeAll(func.stackVars);
         operandNeed.addAll(tmp);
         Collections.reverse(operandNeed);
-        if (!tmp.isEmpty()) {
-            //System.out.println("; " + index + " need :" + Arrays.toString(tmp.toArray(new IrVariable[0])));
+        if (!tmp.isEmpty() && index != 0) {
+            System.out.println("[----]" + func.getFuncDes() + " block " + index + " need :" + Arrays.toString(tmp.toArray(new IrVariable[0])));
         }
         tmp.clear();
         tmp.addAll(lefts);
@@ -294,7 +238,7 @@ public class IrBlock extends IrObject {
         operandRemain.addAll(tmp);
         Collections.reverse(operandRemain);
         if (!tmp.isEmpty()) {
-            //System.out.println("; " + index + " remain :" + Arrays.toString(tmp.toArray(new IrVariable[0])));
+            System.out.println("[----]" + func.getFuncDes() + " block " + index + " remain :" + Arrays.toString(tmp.toArray(new IrVariable[0])));
         }
     }
 
@@ -304,19 +248,27 @@ public class IrBlock extends IrObject {
      * <p>
      * iterate need , trace pre block 's remain
      */
-    void fixOperandNeeds(IrBlock top) {
+    void fixOperandNeeds() {
         if (index == 0) return;
         for (IrVariable need : operandNeed) {
+            //find all path to define
+            if (need2remainPass(need, this)) {
+                System.out.println("[----]" + func.getFuncDes() + " : block " + index + ", ignored " + need);
+                continue;
+            }
+
             String needStackName = need.name + "_stack";
             IrVariable stackVar = new IrVariable(need.type, needStackName);
             String s = needStackName + " = alloca " + need.type;
             IrSentence alloc = IrSentence.parseInst(s);
-            top.first.lines.add(0, alloc);
+            func.first.lines.add(0, alloc);
 
             for (IrBlock irb : getPreBlock(this)) {  //if pre is branch, need all of pre fix
                 List<IrBlock> path = new ArrayList<>();
+                path.add(this);
                 if (!fixPreOfPre(irb, need, stackVar, path)) {
                     //throw new RuntimeException("can't fix " + need);
+                    System.out.println("[WARN] " + func.getFuncDes() + " : block " + index + " " + need + " not fix, come from block " + irb.index);
                 }
             }
 
@@ -344,15 +296,16 @@ public class IrBlock extends IrObject {
             for (Iterator<IrVariable> it = tmp.operandRemain.iterator(); it.hasNext(); ) {
                 IrVariable rems = it.next();
                 if (rems.type.equals(need.type)) {// match ed
+
                     for (IrObject ti : tmp.lines) {
                         if (ti instanceof IrSentence) {
                             IrSentence tis = (IrSentence) ti;
                             if (tis.getLeft() == rems) {
-                                String s1 = "store " + need.type + " " + rems.name + ", " + need.type + "* " + stackVar.name;
+                                String s1 = "store " + need.type + " " + rems.name + ", " + need.type + "* " + stackVar.name +"  ;FIXED BRANCH BLOCK VAR";
                                 IrSentence store = IrSentence.parseInst(s1);
                                 tmp.lines.add(tmp.lines.indexOf(ti) + 1, store);
                                 it.remove();
-                                System.out.println("regvar fixed from " + need + " to " + stackVar);
+                                System.out.println("[----]" + func.getFuncDes() + " : block " + path.get(0).index + ", reg fixed :" + need + " to " + stackVar + " ,reverse path:" + Arrays.toString(path.toArray(new IrBlock[0])));
                                 return true;
                             }
                         }
@@ -370,6 +323,63 @@ public class IrBlock extends IrObject {
     }
 
     List<IrBlock> getPreBlock(IrBlock b) {
-        return inner;
+        return b.inner;
     }
+
+
+    boolean need2remainPass(IrVariable need, IrBlock from) {
+        for (IrObject b : func.blocks) {
+            if (b instanceof IrBlock) {
+                IrBlock ib = ((IrBlock) b);
+                for (IrVariable var : ib.operandRemain) {
+                    if (var.type.equals(need.type) && var.name.equals(need.name)) {
+                        if (backwardArrive(from, ib)) {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * from -> to  ,all path arrived is true, else false
+     *
+     * @param from
+     * @param to
+     * @return
+     */
+    boolean backwardArrive(IrBlock from, IrBlock to) {
+        List<List<IrBlock>> all = new ArrayList<>();
+        List<IrBlock> curpath = new ArrayList<>();
+        iteratorBackward(from, to, curpath, all);
+        int count = 0;
+        for (List<IrBlock> list : all) {
+            if (list.contains(to)) {
+                count++;
+            }
+        }
+        if (count == all.size()) {
+            return true;
+        }
+        return false;
+    }
+
+
+
+
+    public String toString() {
+        return "" + index;
+    }
+
+    public String toString(int deep) {
+        String s = "";
+
+        for (IrObject irb : lines) {
+            s += irb.toString(deep + 1);
+        }
+        return ";" + index + "\n" + s;
+    }
+
 }
