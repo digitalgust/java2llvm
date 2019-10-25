@@ -3,29 +3,29 @@
 
 An Example Project Show Convert Java Byte Code to LLVM IR assembler , compile standalone executable file
 
-This project is based on [class2ir](https://github.com/MParygin/class2ir), it based on an old llvm version.
-So i changed some instruct syntex, and repaired bug, enhanced functionly.
+This project is based on [class2ir](https://github.com/MParygin/class2ir), that based on an old llvm version.
+So I've changed some instruction syntex, and repaired bug, enhanced functional.
 
-Currently:
-Tested CentOS x64 executable file, and say "Hello world".
+## Currently:
+Generated CentOS x64 executable file, and say "Hello world".
 
-Make:
+## Make:
 1. Enter directory java2llvm/
 2. Run build.sh, then you will get app.exe here.
 
-Request:
+## Request:
 CentOS 7.0 x86_64
 java 1.8
 llvm-as / llc / clang  5.0
 make
 
-Known issue:
+## Known issue:
 1. No GC.
 2. Maybe some of java instruction can't work, need test
 3. some of java instruction not implementation , see MV.java
 4. Object memory allocation 
 
-change log:
+## change log:
 1. Add base class java.lang.*, java.io.PrintStream
 2. Add String to handle text output, StringBuilder to handle string concat
 3. Trace instruction flow , to fix register var scope bug.
@@ -33,8 +33,8 @@ change log:
 
 
 
-=================================
-class2ir readme
+==============
+## class2ir readme
 
 This project is the compiler from class files (Java byte code) to LL files (LLVM IR assembler).
 Result files can be compiled by llvm-as to standalone binary ELF files.
