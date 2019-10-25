@@ -163,7 +163,6 @@ public class IRBuilder {
         add(tmp.toString());
     }
 
-    static boolean constFuncPusblished = false;
 
     public void newString(CV cv, RuntimeStack stack, String src) {
         try {
@@ -186,32 +185,18 @@ public class IRBuilder {
             }
 
 
-            String funcName = ty + " @construct_string_with_char_arr_(" + carrIRtype + " %p0)";
-
-            if (!cv.declares.contains(funcName)) {
-                cv.declares.add(funcName);
-                String extFunc = "define " + funcName + "  {\n"
-                        + "    %s0 = alloca " + carrIRtype + "\n"
-                        + "    store " + carrIRtype + " %p0, " + carrIRtype + "* %s0\n"
-                        + "    %stack0 = load " + carrIRtype + ", " + carrIRtype + "* %s0             \n"
-                        + "    ; new %java_lang_String\n"
-                        + "    %__objptr = getelementptr %java_lang_String, %java_lang_String* null, i32 1\n"
-                        + "    %__memsize = ptrtoint %java_lang_String* %__objptr to i32 \n"
-                        + "    %__tmp0 = call i8* @malloc(i32 %__memsize)\n"
-                        + "    %stack1 = bitcast i8* %__tmp0 to %java_lang_String*\n"
-                        + "    ;              \n"
-                        + "    call void @java_lang_String__init___C(%java_lang_String* %stack1, {i32, [0 x i16]}* %stack0) \n"
-                        + "    ret %java_lang_String* %stack1\n"
-                        + "}                  \n";
-                if (!constFuncPusblished) {
-                    cv.assistFunc.add(extFunc);
-                    constFuncPusblished = true;
-                    cv.declares.remove(funcName);// not remove wuold redefine
-                }
-                if (!cv.className.equals("java/lang/String")) {
-                    cv.declares.add("void @java_lang_String__init___C(%java_lang_String*, {i32, [0 x i16]}*)");
-                }
-            }
+            String funcName = AssistLLVM.getConstStringFuncName();
+            cv.declares.add(funcName);
+//            if (!cv.declares.contains(funcName)) {
+//                if (!constFuncPusblished) {
+//                    cv.assistFunc.add(extFunc);
+//                    constFuncPusblished = true;
+//                    cv.declares.remove(funcName);// not remove wuold redefine
+//                }
+//                if (!cv.className.equals("java/lang/String")) {
+//                    cv.declares.add("void @java_lang_String__init___C(%java_lang_String*, {i32, [0 x i16]}*)");
+//                }
+//            }
 
             String v1s = stack.push(carrIRtype);
             add(v1s + " = load " + carrIRtype + " , " + carrIRtype + "* @strptr" + src.hashCode());
@@ -247,6 +232,7 @@ public class IRBuilder {
         add("%__objptr" + tmp + " = getelementptr " + struct + ", " + struct + "* null, i32 1");
         add("%__memsize" + tmp + " = ptrtoint " + struct + "* %__objptr" + tmp + " to i32 ");
         add(reg + " = call i8* @malloc(i32 %__memsize" + tmp + ")");
+        add(";call void @print_debug(i32 %__memsize" + tmp + ")");
         add(res + " = bitcast i8* " + reg + " to " + object);
     }
 
@@ -315,20 +301,31 @@ public class IRBuilder {
     }
 
     // todo split primitive and objects
-    public void newArray(RuntimeStack stack, Resolver resolver, String arrayType) {
+    public void newArray(RuntimeStack stack, Resolver resolver, String javaArrayType) {
         StackValue op = stack.pop();
-        comment("new array " + arrayType + " size: " + op);
-        String ty = Util.javaSignature2irType(resolver, arrayType);
+        comment("new array " + javaArrayType + " size: " + op);
+        String ty = Util.javaSignature2irType(resolver, javaArrayType);
         String res = stack.pushObjRef(ty);
         String reg1 = allocReg();
-        String reg2 = allocReg();
+        String reg2 = allocReg();//for arrlength
         String reg3 = allocReg();
         // size array in bytes
-        int bytes = Internals.sizeOf(res);
-        //todo dodo add(reg1 + " = mul " + op.fullName() + ", " + bytes);
-        add(reg2 + " = add i32 " + op + ", 4");
+        int bytes = Internals.sizeOf(javaArrayType.substring(1));
+        if (bytes == 0) { //object
+            String reg4 = allocReg();
+            add(reg4 + " = call i32 @ptr_size()");
+            add(reg1 + " = mul " + op.fullName() + ", " + reg4);
+        } else {
+            add(reg1 + " = mul " + op.fullName() + ", " + bytes);
+        }
+        add(reg2 + " = add i32 " + reg1 + ", 4");
         add(reg3 + " = call i8* @malloc(i32 " + reg2 + ")");
         add(res + " = bitcast i8* " + reg3 + " to " + ty);
+
+        //save array length to struct first  {i32,[0 x type]}
+        String reg5 = allocReg();
+        getelementptr(reg5, ty.substring(0, ty.length() - 1), res, 0, 0);
+        store(INT, op, reg5, stack);
     }
 
     public void putfield(RuntimeStack stack, Resolver resolver, String className, String name, String signature) {
@@ -520,36 +517,38 @@ public class IRBuilder {
     }
 
     // store [volatile] <ty> <value>, <ty>* <pointer>
-    public void store(String ty, StackValue sv, String pointer, RuntimeStack stack) {
-        String resvt = sv.toString();
-        if (!ty.equals(sv.getIR())) {
-            if (ty.equals(BOOLEAN)) {
-                resvt = stack.push(BOOLEAN);
-                stack.pop();
-                add(resvt + " = trunc " + sv.fullName() + " to " + BOOLEAN);
-            } else if (ty.equals(CHAR)) {
-                resvt = stack.push(CHAR);
-                stack.pop();
-                add(resvt + " = trunc " + sv.fullName() + " to " + CHAR);
-            } else if (ty.equals(SHORT)) {
-                resvt = stack.push(SHORT);
-                stack.pop();
-                add(resvt + " = trunc " + sv.fullName() + " to " + SHORT);
-            } else if (ty.equals(BYTE)) {
-                resvt = stack.push(BYTE);
-                stack.pop();
-                add(resvt + " = trunc " + sv.fullName() + " to " + BYTE);
-            }
-        }
+    public void store(String ty, StackValue sv, String result, RuntimeStack stack) {
+//        String resvt = sv.toString();
+//        if (!ty.equals(sv.getIR())) {
+//            if (ty.equals(BOOLEAN)) {
+//                resvt = stack.push(BOOLEAN);
+//                stack.pop();
+//                add(resvt + " = trunc " + sv.fullName() + " to " + BOOLEAN);
+//            } else if (ty.equals(CHAR)) {
+//                resvt = stack.push(CHAR);
+//                stack.pop();
+//                add(resvt + " = trunc " + sv.fullName() + " to " + CHAR);
+//            } else if (ty.equals(SHORT)) {
+//                resvt = stack.push(SHORT);
+//                stack.pop();
+//                add(resvt + " = trunc " + sv.fullName() + " to " + SHORT);
+//            } else if (ty.equals(BYTE)) {
+//                resvt = stack.push(BYTE);
+//                stack.pop();
+//                add(resvt + " = trunc " + sv.fullName() + " to " + BYTE);
+//            }
+//        }
+        sv = castP1ToP2(stack, sv, ty);
+
         StringBuilder tmp = new StringBuilder();
         tmp.append("store ");
         tmp.append(ty);
         tmp.append(" ");
-        tmp.append(resvt);
+        tmp.append(sv.toString());
         tmp.append(", ");
         tmp.append(ty);
         tmp.append("* ");
-        tmp.append(pointer);
+        tmp.append(result);
         add(tmp.toString());
     }
 

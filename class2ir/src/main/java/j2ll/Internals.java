@@ -15,15 +15,16 @@ public class Internals {
     public static final String DOUBLE = "double";
     public static final String POINTER = "i32*";
 
-    public static int sizeOf(String type) {
-        if (BYTE.equals(type)) return 1;
-        if (CHAR.equals(type)) return 2;
-        if (SHORT.equals(type)) return 2;
-        if (INT.equals(type)) return 4;
-        if (LONG.equals(type)) return 8;
-        if (FLOAT.equals(type)) return 4;
-        if (DOUBLE.equals(type)) return 8;
-        return 1;
+    public static int sizeOf(String javaType) {
+        if ("Z".equals(javaType)) return 1;
+        if ("B".equals(javaType)) return 1;
+        if ("C".equals(javaType)) return 2;
+        if ("S".equals(javaType)) return 2;
+        if ("I".equals(javaType)) return 4;
+        if ("J".equals(javaType)) return 8;
+        if ("F".equals(javaType)) return 4;
+        if ("D".equals(javaType)) return 8;
+        return 0;
     }
 
     public static String javacode2javatag(int type) {

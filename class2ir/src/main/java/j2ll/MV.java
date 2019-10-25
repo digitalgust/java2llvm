@@ -116,9 +116,10 @@ public class MV extends MethodVisitor {
     @Override
     public void visitCode() {
         out.add("__MethodEntry:");
-        //todo gust
+
+
         // 1) local vars & args
-        int cntSlot = 0;
+        int cntSlot = 0, cntArgs = 0;
         for (; ; ) {
             List<LocalVar> lvs = vars.getBySlot(cntSlot);
             if (lvs.isEmpty()) {
@@ -134,38 +135,13 @@ public class MV extends MethodVisitor {
                     cntSlot++;
                 }
                 // init from arg (!)
-                if (this._argTypes.size() < cntSlot) continue;
-                String argType = this._argTypes.get(cntSlot - 1);
-                out.add("    store " + argType + " %s" + lv.slot + ", " + argType + "* %" + lv.name); //todo
+                if (cntArgs < this._argTypes.size()) {
+                    String argType = this._argTypes.get(cntArgs);
+                    out.add("    store " + argType + " %s" + lv.slot + ", " + argType + "* %" + lv.name);
+                    cntArgs++;
+                }
             }
         }
-        String[] result = out.getStrings().toArray(new String[0]);
-//        // 2) text
-//        for (int i = 0; i < result.length; i++) {
-//            String str = result[i];
-//            int p = str.indexOf("slot-pointer2");  //todo
-//            if (p != -1) {
-//                for (LocalVar lv : vars.getAll()) {
-//                    String s = "slot-pointer:" + lv.slot;
-//                    String r = Util.javaSignature2irType(this.cv.getStatistics().getResolver(), lv.signature) + "* %" + lv.name; // todo
-//                    result[i] = str.replace(s, r);
-//                }
-//            }
-//
-//            p = str.indexOf("slot-type2");
-//            if (p != -1) {
-//                for (LocalVar lv : vars.getAll()) {
-//                    String s = "slot-type:" + lv.slot;
-//                    String r = Util.javaSignature2irType(this.cv.getStatistics().getResolver(), lv.signature);
-//                    if (r == null) {
-//                        //System.out.println("CF TYPE " + lv.signature);
-//                    } else {
-//                        result[i] = str.replace(s, r);
-//                    }
-//                }
-//            }
-//        }
-
     }
 
     @Override
@@ -1092,13 +1068,15 @@ public class MV extends MethodVisitor {
         ps.print("; args: ");
         ps.println(this._argTypes.size());
 
-        String define = "define " + this._resType + " @" + Util.classMethodSignature2id(this.cv.className, this.methodName, ss) + "(" + Util.enumArgs(this._argTypes, "%s") + ") {";
+
+        String methodIrName = this._resType + " @" + Util.classMethodSignature2id(this.cv.className, this.methodName, ss) + "(" + Util.enumArgs(this._argTypes, "%s") + ")";
+        if (methodName.equals("<clinit>")) {
+            AssistLLVM.addClinit(methodIrName);
+        }
+
+        String define = "define " + methodIrName + "{";
         ps.println(define);
 
-
-        if (methodName.equals("main")) {
-            int debug = 1;
-        }
 
         String[] result = out.getStrings().toArray(new String[0]);
 

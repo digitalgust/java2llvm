@@ -20,6 +20,7 @@ public class Main {
         String llvmPath = "./app/c/";
 
 
+
         if (args.length < 3) {
             System.out.println("Posix :");
             System.out.println("Compile java file:");
@@ -34,21 +35,23 @@ public class Main {
         System.out.println("classes *.class output path  : " + classesPath);
         System.out.println("llvm *.ll output path        : " + llvmPath);
 
-        compile(srcPath, classesPath);
+        javaSrc2class(srcPath, classesPath);
 
-        convert2ll("java.lang.Object", classesPath, llvmPath);
-        convert2ll("java.io.PrintStream", classesPath, llvmPath);
-        convert2ll("java.lang.System", classesPath, llvmPath);
-        convert2ll("java.lang.Throwable", classesPath, llvmPath);
-        convert2ll("java.lang.NullPointerException", classesPath, llvmPath);
-        convert2ll("java.lang.String", classesPath, llvmPath);
-        convert2ll("java.lang.StringBuilder", classesPath, llvmPath);
-        convert2ll("test.Test", classesPath, llvmPath);
-        convert2ll("test.TestParent", classesPath, llvmPath);
+        class2ll("java.lang.Object", classesPath, llvmPath);
+        class2ll("java.io.PrintStream", classesPath, llvmPath);
+        class2ll("java.lang.System", classesPath, llvmPath);
+        class2ll("java.lang.Throwable", classesPath, llvmPath);
+        class2ll("java.lang.NullPointerException", classesPath, llvmPath);
+        class2ll("java.lang.String", classesPath, llvmPath);
+        class2ll("java.lang.StringBuilder", classesPath, llvmPath);
+        class2ll("test.Test", classesPath, llvmPath);
+        class2ll("test.TestParent", classesPath, llvmPath);
 
+        //gen clinit call
+        AssistLLVM.genClinits(llvmPath);
     }
 
-    static void compile(String srcPath, String classesPath) {
+    static void javaSrc2class(String srcPath, String classesPath) {
 
         File f = new File(classesPath);
         if (!f.exists()) {
@@ -63,7 +66,7 @@ public class Main {
 
     }
 
-    static void convert2ll(String className, String classesPath, String llvmPath) throws IOException {
+    static void class2ll(String className, String classesPath, String llvmPath) throws IOException {
 
         String outFileName = className + ".ll";
         PrintStream ps = new PrintStream(new File(llvmPath, outFileName));
@@ -83,6 +86,8 @@ public class Main {
         cr.accept(cv, 0);
         ps.flush();
         is.close();
+
+
     }
 
 

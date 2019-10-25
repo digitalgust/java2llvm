@@ -1,6 +1,6 @@
 package java.lang;
 
-class StringBuilder {
+public class StringBuilder {
 
     char[] value = new char[16];
     int count = 0;
@@ -25,13 +25,19 @@ class StringBuilder {
 
     public StringBuilder append(long i) {
         String s = "";
-        while (i != 0) {
-            int v = (int) (i % 10);
-            s = chars[v] + s;
-            i /= 10;
-        }
-        if (i < 0) {
-            s = '-' + s;
+        if(i == 0){
+            s = "0";
+        }else{
+            boolean ne = i < 0;
+            if (ne) i = -i;
+            while (i != 0) {
+                int v = (int) (i % 10);
+                s = chars[v] + s;
+                i /= 10;
+            }
+            if (ne) {
+                s = '-' + s;
+            }
         }
         return append(s);
     }

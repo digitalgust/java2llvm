@@ -5,35 +5,41 @@
 
 #include "runner.h"
 
-void test_Test__clinit_();
+void classes_clinit();
 
 void test_Test_main();
 
 int main() {
-    test_Test__clinit_();
+    classes_clinit();
     test_Test_main();
 }
 
+void print_debug(int v) {
+    printf("lldebug: %d \n", v);
+}
 
+void print_ptr(long long v) {
+    printf("ll_ptr: %llx (%lld)\n", v, v);
+}
+
+/*
  inline s32 stack_size(RuntimeStack *stack) {
     return (stack->sp - stack->store);
 }
 
-/* push Integer */
+
  inline void push_int(RuntimeStack *stack, s32 value) {
     stack->sp->ivalue = value;//clear 64bit
     stack->sp->type = STACK_ENTRY_INT;
     stack->sp++;
 }
 
-
-/* pop Integer */
  inline s32 pop_int(RuntimeStack *stack) {
     stack->sp--;
     return stack->sp->ivalue;
 }
 
-/* push Double */
+
  inline void push_double(RuntimeStack *stack, f64 value) {
     stack->sp->dvalue = value;
     stack->sp->type = STACK_ENTRY_DOUBLE;
@@ -43,13 +49,11 @@ int main() {
     stack->sp++;
 }
 
-/* pop Double */
  inline f64 pop_double(RuntimeStack *stack) {
     stack->sp -= 2;
     return stack->sp->dvalue;
 }
 
-/* push Float */
  inline void push_float(RuntimeStack *stack, f32 value) {
     //ptr->lvalue = 0;//clear 64bit
     stack->sp->fvalue = value;
@@ -57,14 +61,12 @@ int main() {
     stack->sp++;
 }
 
-/* pop Float */
  inline f32 pop_float(RuntimeStack *stack) {
     stack->sp--;
     return stack->sp->fvalue;
 }
 
 
-/* push Long */
  inline void push_long(RuntimeStack *stack, s64 value) {
     stack->sp->lvalue = value;
     stack->sp->type = STACK_ENTRY_LONG;
@@ -74,13 +76,11 @@ int main() {
     stack->sp++;
 }
 
-/* pop Long */
  inline s64 pop_long(RuntimeStack *stack) {
     stack->sp -= 2;
     return stack->sp->lvalue;
 }
 
-/* push Ref */
  inline void push_ref(RuntimeStack *stack, __refer value) {
     stack->sp->type = STACK_ENTRY_REF;
     stack->sp->rvalue = value;
@@ -99,7 +99,6 @@ int main() {
     stack->sp++;
 }
 
-/* Pop Stack Entry */
  inline void pop_entry(RuntimeStack *stack, StackEntry *entry) {
     stack->sp--;
     entry->lvalue = stack->sp->lvalue;
@@ -118,7 +117,6 @@ int main() {
 }
 
 
-/* Entry to Int */
  inline s32 entry_2_int(StackEntry *entry) {
     return entry->ivalue;
 }
@@ -130,3 +128,4 @@ int main() {
  inline __refer entry_2_refer(StackEntry *entry) {
     return entry->rvalue;
 }
+*/

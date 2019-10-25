@@ -1,7 +1,7 @@
 #ifndef RUNNER_H
 #define RUNNER_H
 
-
+/*
 #define STACK_ENTRY_NONE        0
 #define STACK_ENTRY_INT         1
 #define STACK_ENTRY_FLOAT       2
@@ -74,5 +74,5 @@ s64 entry_2_long(StackEntry *entry);
 
 __refer entry_2_refer(StackEntry *entry);
 
-
+*/
 #endif //RUNNER_H

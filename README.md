@@ -6,10 +6,10 @@ An Example Project Show Convert Java Byte Code to LLVM IR assembler , compile st
 This project is based on [class2ir](https://github.com/MParygin/class2ir), that based on an old llvm version.
 So I've changed some instruction syntex, and repaired bug, enhanced functional.
 
-## Currently:
+### Currently:
 Generated CentOS x64 executable file, and say "Hello world".
 
-## Make:
+### Make:
 1. Enter directory java2llvm/
 2. Run build.sh, then you will get app.exe here.
 
@@ -19,13 +19,13 @@ java 1.8
 llvm-as / llc / clang  5.0
 make
 
-## Known issue:
+### Known issue:
 1. No GC.
 2. Maybe some of java instruction can't work, need test
 3. some of java instruction not implementation , see MV.java
 4. Object memory allocation 
 
-## change log:
+### change log:
 1. Add base class java.lang.*, java.io.PrintStream
 2. Add String to handle text output, StringBuilder to handle string concat
 3. Trace instruction flow , to fix register var scope bug.

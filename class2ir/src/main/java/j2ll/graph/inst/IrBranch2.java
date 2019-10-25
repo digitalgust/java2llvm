@@ -42,7 +42,7 @@ public class IrBranch2 extends IrSentence {
 
     @Override
     public String toString() {
-        return instName + " " + operand + ", label " + lab1 + ", label " + lab2;
+        return instName + " " + operand + ", label %" + lab1 + ", label %" + lab2;
     }
 
 }

@@ -79,8 +79,7 @@ public class CV extends ClassVisitor {
     public void visitEnd() {
         this.ps.println("; CLASS: " + this.className + " extends " + this.superName);
         this.ps.println();
-        this.ps.println("declare noalias i8* @malloc(i32)");
-        this.ps.println("declare void @free(i8*)");
+        this.ps.println(AssistLLVM.getAssistFuncDeclare());
         this.ps.println();
 
         // declares
