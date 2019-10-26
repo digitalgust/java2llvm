@@ -77,7 +77,10 @@ abstract public class IrSentence extends IrObject {
         } else if (right.startsWith("alloca ")) {
             irs = new IrAlloca();
             irs.parse(s);
-        } else if (right.startsWith("icmp ")) {
+        } else if (
+                right.startsWith("icmp ")
+                        || right.startsWith("fcmp ")
+        ) {
             irs = new IrIcmp();
             irs.parse(s);
         } else if (right.startsWith("getelementptr ")) {
@@ -102,6 +105,8 @@ abstract public class IrSentence extends IrObject {
                         || right.startsWith("zext ")
                         || right.startsWith("ptrtoint ")
                         || right.startsWith("inttoptr ")
+                        || right.startsWith("sitofp ")
+                        || right.startsWith("fptosi ")
         ) {
             irs = new IrBitcast();
             irs.parse(s);
@@ -111,11 +116,16 @@ abstract public class IrSentence extends IrObject {
                         || right.startsWith("mul ")
                         || right.startsWith("div ")
                         || right.startsWith("rem ")
-                        || right.startsWith("sadd ")
+                        || right.startsWith("sadd ")//
                         || right.startsWith("ssub ")
                         || right.startsWith("smul ")
                         || right.startsWith("sdiv ")
                         || right.startsWith("srem ")
+                        || right.startsWith("fadd ")//
+                        || right.startsWith("fsub ")
+                        || right.startsWith("fmul ")
+                        || right.startsWith("fdiv ")
+                        || right.startsWith("frem ")
         ) {
             irs = new IrArith();
             irs.parse(s);

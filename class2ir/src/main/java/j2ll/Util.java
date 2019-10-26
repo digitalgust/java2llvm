@@ -10,8 +10,6 @@ import java.util.StringJoiner;
 
 import static j2ll.Internals.*;
 
-//import java.lang.reflect.Field;
-
 
 public final class Util {
     static public ClassHelper helper;
@@ -40,33 +38,67 @@ public final class Util {
             str = str.substring(1, str.length() - 1);
             return resolver.resolve(str);
         } else if (str.startsWith("[")) {
-            String next = "" + str.substring(1);
-            char nc = str.charAt(1);
-            if (nc != '[') {
-                switch (nc) {
-                    case 'Z':
-                        return "{i32, [0 x i8]}*";
-                    case 'B':
-                        return "{i32, [0 x i8]}*";
-                    case 'S':
-                        return "{i32, [0 x i16]*";
-                    case 'I':
-                        return "{i32, [0 x i32]*";
-                    case 'J':
-                        return "{i32, [0 x i64]}*";
-                    case 'C':
-                        return "{i32, [0 x i16]}*";
-                    case 'F':
-                        return "{i32, [0 x float]}*";
-                    case 'D':
-                        return "{i32, [0 x double]}*";
-                    case 'L':
-                        return "{i32, [0 x " + typetag2ir(resolver, next) + "*]}*";
-                }
-            }
+            return javaArr2irType(resolver, str);
         }
         //return null;
         throw new RuntimeException(str);
+    }
+
+    static final String ARRAY_PREFIX = "{i32, [0 x ";
+    static final String ARRAY_APPENDIX = "]}";
+
+    public static String detype(String type) {
+        try {
+            if (type.endsWith("*")) {
+                return type.substring(0, type.length() - 1);
+            }else if(type.startsWith("%..")){
+                String s = "%"+type.substring(2)+"*";
+                return s;
+            } else {
+                throw new RuntimeException("detype error:"+type);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            return type;
+        }
+    }
+
+    public static String javaArr2irType(Resolver resolver, String signature) {
+        resolver.resolve(signature);
+        String next = "" + signature.substring(1);
+        if (next.startsWith("[")) javaArr2irType(resolver, next);//recur resolve
+
+        String s = "%" + signature.replace("[", ".") + "*";
+        s = s.replaceAll("[\\/\\;]", "_");
+        return s;
+    }
+
+    public static String javaArr2struct(Resolver resolver, String signature) {
+        resolver.resolve(signature);
+        String next = "" + signature.substring(1);
+        char nc = signature.charAt(1);
+        switch (nc) {
+            case 'Z':
+                return ARRAY_PREFIX + BYTE + ARRAY_APPENDIX;
+            case 'B':
+                return ARRAY_PREFIX + BYTE + ARRAY_APPENDIX;
+            case 'S':
+                return ARRAY_PREFIX + SHORT + ARRAY_APPENDIX;
+            case 'I':
+                return ARRAY_PREFIX + INT + ARRAY_APPENDIX;
+            case 'J':
+                return ARRAY_PREFIX + LONG + ARRAY_APPENDIX;
+            case 'C':
+                return ARRAY_PREFIX + CHAR + ARRAY_APPENDIX;
+            case 'F':
+                return ARRAY_PREFIX + FLOAT + ARRAY_APPENDIX;
+            case 'D':
+                return ARRAY_PREFIX + DOUBLE + ARRAY_APPENDIX;
+            case 'L':
+            case '[':
+                return ARRAY_PREFIX + javaSignature2irType(resolver, next) + ARRAY_APPENDIX;
+        }
+        throw new RuntimeException(signature);
     }
 
     public static List<String> javaSignatures2irTypes(Resolver resolver, String str) {
@@ -133,14 +165,23 @@ public final class Util {
 
     public static String class2struct(Resolver resolver, String className) {
         try {
-            ClassFile c = helper.getClassFile(className);
-            StringJoiner joiner = new StringJoiner(", ", "{", "}");
-            for (Field f : c.getFields()) {
-                joiner.add(Internals.typetag2ir(resolver, f.getDescription()));
+            if (className.startsWith("[")) {
+                String s = javaArr2irType(resolver, className).replace("*", "");
+                s += " = type " + javaArr2struct(resolver, className);
+                return s;
+            } else {
+                ClassFile c = helper.getClassFile(className);
+                if (c == null) {
+                    int debug = 1;
+                }
+                StringJoiner joiner = new StringJoiner(", ", "{", "}");
+                for (Field f : c.getFields()) {
+                    joiner.add(javaSignature2irType(resolver, f.getDescription()));
+                }
+                String s = "%" + className.replace('/', '_') + " = type " + joiner; //todo struct -> internals
+                //System.out.println("class2struct:" + s);
+                return s;
             }
-            String s = "%" + className.replace('/', '_') + " = type " + joiner; //todo struct -> internals
-            //System.out.println("class2struct:" + s);
-            return s;
         } catch (Exception e) {
             e.printStackTrace();
             return className + " is unknown";
@@ -159,7 +200,7 @@ public final class Util {
     }
 
 
-    public static int class2ptr(String className, String name) {
+    public static int fieldIndexInClass(String className, String name) {
         try {
             ClassFile c = helper.getClassFile(className);
             int pos = 0;

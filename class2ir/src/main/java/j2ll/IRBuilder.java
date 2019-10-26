@@ -40,9 +40,12 @@ public class IRBuilder {
     public void addImm(Object value, String type, RuntimeStack stack) {
         String immname = "%_imm_" + tmp;
         add(immname + " = alloca " + type);
-        add("store " + type + " " + floatToString(value) + ", " + type + "* " + immname);
+        StackValue sv1 = new StackValue(StackValue.MODE_IMM, value, type);
+        //add("store " + type + " " + floatToString(value) + ", " + type + "* " + immname);
+        store(type, sv1, immname, stack);
         String sv = stack.push(type);
-        add(sv + " = load " + type + ", " + type + "* " + immname);
+        //add(sv + " = load " + type + ", " + type + "* " + immname);
+        load(sv, type, immname, stack);
         tmp++;
     }
 
@@ -57,15 +60,15 @@ public class IRBuilder {
 
         if (!ir2.equals(ir1)) {
             if (ir1.equals(LONG)) {
-                if (ir2.equals(FLOAT)) {
+                if (ir2.equals(FLOAT) || ir2.equals(DOUBLE)) {
                     throw new RuntimeException("  long  to float");
                 } else {
                     String resvt = stack.push(ir2);
                     add(resvt + " = trunc " + op1.fullName() + " to " + ir2);
                 }
             } else if (ir1.equals(INT)) {
-                if (ir2.equals(FLOAT)) {
-                    throw new RuntimeException("  long  to float");
+                if (ir2.equals(FLOAT) || ir2.equals(DOUBLE)) {
+                    throw new RuntimeException("  int  to float");
                 } else if (ir2.equals(LONG)) {
                     String resvt = stack.push(ir2);
                     add(resvt + " = sext " + op1.fullName() + " to " + ir2);
@@ -73,31 +76,53 @@ public class IRBuilder {
                     String resvt = stack.push(ir2);
                     add(resvt + " = trunc " + op1.fullName() + " to " + ir2);
                 }
-            } else if (ir1.equals(FLOAT) || ir1.equals(DOUBLE)) {
-                throw new RuntimeException(" float to int");
             } else if (ir1.equals(BOOLEAN)) {
-                String resvt = stack.push(ir2);
-                add(resvt + " = sext " + op1.fullName() + " to " + ir2);
+                if (ir2.equals(FLOAT) || ir2.equals(DOUBLE)) {
+                    throw new RuntimeException("  boolean  to float");
+                } else {
+                    String resvt = stack.push(ir2);
+                    add(resvt + " = sext " + op1.fullName() + " to " + ir2);
+                }
             } else if (ir1.equals(BYTE)) {
                 String resvt = stack.push(ir2);
-                if (ir1.equals(BOOLEAN)) {
+                if (ir2.equals(FLOAT) || ir2.equals(DOUBLE)) {
+                    throw new RuntimeException("  byte  to float");
+                } else if (ir1.equals(BOOLEAN)) {
                     add(resvt + " = trunc " + op1.fullName() + " to " + ir2);
                 } else {
                     add(resvt + " = sext " + op1.fullName() + " to " + ir2);
                 }
             } else if (ir1.equals(CHAR)) {
                 String resvt = stack.push(ir2);
-                if (ir1.equals(BOOLEAN) || ir1.equals(BYTE)) {
+                if (ir2.equals(FLOAT) || ir2.equals(DOUBLE)) {
+                    throw new RuntimeException("  char  to float");
+                } else if (ir1.equals(BOOLEAN) || ir1.equals(BYTE)) {
                     add(resvt + " = trunc " + op1.fullName() + " to " + ir2);
                 } else {
                     add(resvt + " = zext " + op1.fullName() + " to " + ir2);
                 }
             } else if (ir1.equals(SHORT)) {
                 String resvt = stack.push(ir2);
-                if (ir1.equals(BOOLEAN) || ir1.equals(BYTE)) {
+                if (ir2.equals(FLOAT) || ir2.equals(DOUBLE)) {
+                    throw new RuntimeException("  short  to float");
+                } else if (ir1.equals(BOOLEAN) || ir1.equals(BYTE)) {
                     add(resvt + " = trunc " + op1.fullName() + " to " + ir2);
                 } else {
                     add(resvt + " = sext " + op1.fullName() + " to " + ir2);
+                }
+            } else if (ir1.equals(FLOAT)) {
+                String resvt = stack.push(ir2);
+                if (ir2.equals(DOUBLE)) {
+                    add(resvt + " = fpext " + op1.fullName() + " to " + ir2);
+                } else {
+                    throw new RuntimeException(" float to " + ir2);
+                }
+            } else if (ir1.equals(DOUBLE)) {
+                String resvt = stack.push(ir2);
+                if (ir2.equals(FLOAT)) {
+                    add(resvt + " = fptrunc " + op1.fullName() + " to " + ir2);
+                } else {
+                    throw new RuntimeException(" double to " + ir2);
                 }
             } else {
                 String resvt = stack.push(ir2);
@@ -177,7 +202,7 @@ public class IRBuilder {
             String ty = Util.javaSignature2irType(cv.getStatistics().getResolver(), "Ljava/lang/String;"); //for add class java.lang.String declare
             String varName = "@str" + src.hashCode();
             String str = varName + " = internal global { i32, [" + carr.length + " x i16] } { i32 " + carr.length + ",[" + carr.length + " x i16] [" + dest + "]}, align 4 \n";
-            String carrIRtype = Util.javaSignature2irType(cv.getStatistics().getResolver(), "[C \n");
+            String carrIRtype = Util.javaSignature2irType(cv.getStatistics().getResolver(), "[C");
             String strptrName = "@strptr" + src.hashCode();
             String strptr = strptrName + " = internal global " + carrIRtype + " bitcast ( { i32 ,[" + carr.length + " x i16]}* " + varName + " to " + carrIRtype + ")";
             if (!cv.staticStrs.containsKey(str)) {
@@ -187,16 +212,6 @@ public class IRBuilder {
 
             String funcName = AssistLLVM.getConstStringFuncName();
             cv.declares.add(funcName);
-//            if (!cv.declares.contains(funcName)) {
-//                if (!constFuncPusblished) {
-//                    cv.assistFunc.add(extFunc);
-//                    constFuncPusblished = true;
-//                    cv.declares.remove(funcName);// not remove wuold redefine
-//                }
-//                if (!cv.className.equals("java/lang/String")) {
-//                    cv.declares.add("void @java_lang_String__init___C(%java_lang_String*, {i32, [0 x i16]}*)");
-//                }
-//            }
 
             String v1s = stack.push(carrIRtype);
             add(v1s + " = load " + carrIRtype + " , " + carrIRtype + "* @strptr" + src.hashCode());
@@ -216,7 +231,7 @@ public class IRBuilder {
         String reg = allocReg();
         // out
         comment("arraylength " + sv.fullName());
-        getelementptr(reg, sv, 0, 0);
+        getelementptr(reg, sv.getIR(), sv.toString(), 0, 0);
         load(result, Internals.INT, reg, stack);
     }
 
@@ -305,12 +320,11 @@ public class IRBuilder {
         StackValue op = stack.pop();
         comment("new array " + javaArrayType + " size: " + op);
         String ty = Util.javaSignature2irType(resolver, javaArrayType);
-        String res = stack.pushObjRef(ty);
         String reg1 = allocReg();
         String reg2 = allocReg();//for arrlength
         String reg3 = allocReg();
         // size array in bytes
-        int bytes = Internals.sizeOf(javaArrayType.substring(1));
+        int bytes = Internals.sizeOf(javaArrayType);
         if (bytes == 0) { //object
             String reg4 = allocReg();
             add(reg4 + " = call i32 @ptr_size()");
@@ -320,11 +334,14 @@ public class IRBuilder {
         }
         add(reg2 + " = add i32 " + reg1 + ", 4");
         add(reg3 + " = call i8* @malloc(i32 " + reg2 + ")");
-        add(res + " = bitcast i8* " + reg3 + " to " + ty);
+        String parent=Util.javaSignature2irType(resolver, "["+javaArrayType);
+        String res = stack.push(parent);
+        add(res + " = bitcast i8* " + reg3 + " to " + parent);
 
         //save array length to struct first  {i32,[0 x type]}
         String reg5 = allocReg();
-        getelementptr(reg5, ty.substring(0, ty.length() - 1), res, 0, 0);
+        StackValue ptr = stack.peek(-1);
+        getelementptr(reg5, ptr.getIR(), ptr.toString(), 0, 0);
         store(INT, op, reg5, stack);
     }
 
@@ -336,7 +353,7 @@ public class IRBuilder {
         String sp = allocReg();
         // out
         comment("putfield " + className + " " + name + " " + signature + " ( " + inst.fullName() + " := " + value.fullName() + " )");
-        getelementptr(sp, inst, 0, Util.class2ptr(className, name));
+        getelementptr(sp, inst.getIR(), inst.toString(), 0, Util.fieldIndexInClass(className, name));
         store(ty, value, sp, stack);
     }
 
@@ -347,7 +364,7 @@ public class IRBuilder {
         String sp = allocReg();
         // out
         comment("putstatic " + className + " " + name + " " + signature + " ( " + signature + " := " + value.fullName() + " )");
-        getelementptr(sp, ty, Util.static2str(className, name));
+        getelementptr(sp, ty + "*", Util.static2str(className, name));
         store(ty, value, sp, stack);
     }
 
@@ -360,7 +377,7 @@ public class IRBuilder {
         String sp = allocReg();
         // out
         comment("getfield " + className + " " + name + " " + signature + " ( " + inst.fullName() + " )");
-        getelementptr(sp, inst, 0, Util.class2ptr(className, name));
+        getelementptr(sp, inst.getIR(), inst.toString(), 0, Util.fieldIndexInClass(className, name));
         load(result, ty, sp, stack);
     }
 
@@ -371,7 +388,7 @@ public class IRBuilder {
         String sp = allocReg();
         // out
         comment("getstatic " + className + " " + name + " " + signature + " ( " + result + " := " + signature + " )");
-        getelementptr(sp, ty, Util.static2str(className, name));
+        getelementptr(sp, ty + "*", Util.static2str(className, name));
         load(result, ty, sp, stack);
 
     }
@@ -384,7 +401,8 @@ public class IRBuilder {
         String sp = allocReg();
         // out
         comment(type + "astore ");
-        getelementptr(sp, arrayRef, 0, 1, index.fullName()); // pointer to element of array
+        String resultType = Util.detype(arrayRef.getIR());
+        getelementptr(sp, resultType, arrayRef, 0, 1, index.fullName()); // pointer to element of array
         store(type, value, sp, stack);
     }
 
@@ -396,7 +414,8 @@ public class IRBuilder {
         String sp = allocReg();
         // out
         comment("aastore " + value.getIR());
-        getelementptr(sp, arrayRef, 0, 1, index.fullName()); // pointer to element of array
+        String resultType = Util.detype(arrayRef.getIR());
+        getelementptr(sp, resultType, arrayRef, 0, 1, index.fullName()); // pointer to element of array
         store(value.getIR(), value, sp, stack);
     }
 
@@ -408,8 +427,9 @@ public class IRBuilder {
         String value = stack.push(type);
         String sp = allocReg();
         // out
-        comment(type + "aload " + javatype);
-        getelementptr(sp, arrayRef, 0, 1, index.fullName()); // pointer to element of array
+        comment(type + "aload ");
+        String resultType = Util.detype(arrayRef.getIR());
+        getelementptr(sp, resultType, arrayRef, 0, 1, index.fullName()); // pointer to element of array
         load(value, type, sp, stack);
 
     }
@@ -418,13 +438,15 @@ public class IRBuilder {
         // state
         StackValue index = stack.pop();
         StackValue arrayRef = stack.pop();
-        String ty = Internals.dearrayOf(arrayRef.getIR());
-        String value = stack.push(ty);
+        String ty = arrayRef.getIR();
         String sp = allocReg();
         // out
         comment("aaload " + ty);
-        getelementptr(sp, arrayRef, 0, 1, index.fullName()); // pointer to element of array
-        load(value, ty, sp, stack);
+        String resultType = Util.detype(arrayRef.getIR());
+        getelementptr(sp, resultType, arrayRef, 0, 1, index.fullName()); // pointer to element of array
+        String loadType=Util.detype(resultType);
+        String value = stack.push(loadType);
+        load(value, loadType, sp, stack);
     }
 
     public void fptosi(RuntimeStack stack, String type) {
@@ -451,15 +473,15 @@ public class IRBuilder {
     }
 
     // <result> = getelementptr <pty>* <ptrval>{, <ty> <idx>}*
-    public void getelementptr(String result, String pty, String ptrval, Object... idx) {
+    public void getelementptr(String result, String ptrType, String ptrName, Object... idx) {
         StringBuilder tmp = new StringBuilder();
         tmp.append(result);
         tmp.append(" = getelementptr ");
-        tmp.append(pty);
+        tmp.append(Util.detype(ptrType));
         tmp.append(", ");
-        tmp.append(pty);
-        tmp.append("* ");
-        tmp.append(ptrval);
+        tmp.append(ptrType);
+        tmp.append(" ");
+        tmp.append(ptrName);
         for (Object id : idx) {
             if (id instanceof Integer) {
                 tmp.append(", i32 ");
@@ -471,14 +493,13 @@ public class IRBuilder {
         add(tmp.toString());
     }
 
-    public void getelementptr(String result, StackValue sv, Object... idx) {
+    public void getelementptr(String result, String resultType, StackValue ptr, Object... idx) {
         StringBuilder tmp = new StringBuilder();
         tmp.append(result);
         tmp.append(" = getelementptr ");
-        tmp.append(sv.getIR().replace('*', ' '));
-//        tmp.append(sv.getIR().replace('*',' '));
+        tmp.append(resultType);
         tmp.append(", ");
-        tmp.append(sv.fullName());
+        tmp.append(ptr.fullName());
         for (Object id : idx) {
             tmp.append(", ");
             if (id instanceof Integer) {
@@ -505,39 +526,10 @@ public class IRBuilder {
         tmp.append("* ");
         tmp.append(pointer);
         add(tmp.toString());
-//        if (ty.equals(SHORT) || ty.equals(BYTE)) {
-//            StackValue sv = stack.pop();
-//            String resvt = stack.push(INT);
-//            add(resvt + " = sext " + sv.fullName() + " to " + INT);
-//        } else if (ty.equals(BOOLEAN) || ty.equals(CHAR)) {
-//            StackValue sv = stack.pop();
-//            String resvt = stack.push(INT);
-//            add(resvt + " = zext " + sv.fullName() + " to " + INT);
-//        }
     }
 
     // store [volatile] <ty> <value>, <ty>* <pointer>
     public void store(String ty, StackValue sv, String result, RuntimeStack stack) {
-//        String resvt = sv.toString();
-//        if (!ty.equals(sv.getIR())) {
-//            if (ty.equals(BOOLEAN)) {
-//                resvt = stack.push(BOOLEAN);
-//                stack.pop();
-//                add(resvt + " = trunc " + sv.fullName() + " to " + BOOLEAN);
-//            } else if (ty.equals(CHAR)) {
-//                resvt = stack.push(CHAR);
-//                stack.pop();
-//                add(resvt + " = trunc " + sv.fullName() + " to " + CHAR);
-//            } else if (ty.equals(SHORT)) {
-//                resvt = stack.push(SHORT);
-//                stack.pop();
-//                add(resvt + " = trunc " + sv.fullName() + " to " + SHORT);
-//            } else if (ty.equals(BYTE)) {
-//                resvt = stack.push(BYTE);
-//                stack.pop();
-//                add(resvt + " = trunc " + sv.fullName() + " to " + BYTE);
-//            }
-//        }
         sv = castP1ToP2(stack, sv, ty);
 
         StringBuilder tmp = new StringBuilder();

@@ -37,6 +37,7 @@ public class MV extends MethodVisitor {
     // labels
     List<String> labels = new ArrayList<>();
     List<String> usedLabels = new ArrayList<>();
+    String curLabel;
 
 
     int max_local;
@@ -117,6 +118,9 @@ public class MV extends MethodVisitor {
     public void visitCode() {
         out.add("__MethodEntry:");
 
+        if(methodName.equals("dgefa")){
+            int debug=1;
+        }
 
         // 1) local vars & args
         int cntSlot = 0, cntArgs = 0;
@@ -126,13 +130,14 @@ public class MV extends MethodVisitor {
                 break;
             }
             cntSlot++;
+            boolean doubleslot=false;
             for (LocalVar lv : lvs) {
 
                 // local var
                 out.add("    ");
                 out.add("%" + lv.name + " = alloca " + Util.javaSignature2irType(this.cv.getStatistics().getResolver(), lv.signature) + "\t\t; slot " + lv.slot + " = " + lv.signature);
                 if (lv.signature.equals("J") || lv.signature.equals("D")) {
-                    cntSlot++;
+                    doubleslot = true;
                 }
                 // init from arg (!)
                 if (cntArgs < this._argTypes.size()) {
@@ -141,14 +146,17 @@ public class MV extends MethodVisitor {
                     cntArgs++;
                 }
             }
+            if(doubleslot){
+                cntSlot++;
+            }
         }
     }
 
     @Override
     public void visitFrame(int type, int numLocal, Object[] local, int numStack, Object[] stackitems) {
         //out.add("; TODO FRame: " + i + " " + i1 + " " + i2);
-        //out.add("; type " + type + ", local " + numLocal + " " + Arrays.toString(local) + "," + " stack " + numStack + " " + Arrays.toString(stackitems));
-        vars.activeByFrame(type, numLocal, local);
+        out.add("; type " + type + ", local " + numLocal + " " + Arrays.toString(local) + "," + " stack " + numStack + " " + Arrays.toString(stackitems));
+        //vars.activeByFrame(type, numLocal, local);
 
         switch (type) {
             case org.objectweb.asm.Opcodes.F_APPEND: { //1
@@ -221,7 +229,6 @@ public class MV extends MethodVisitor {
             {
                 int value = opcode - Opcodes.FCONST_0;
                 out.add("; fconst " + value);
-//                stack.pushImm((float) value, FLOAT);
                 out.addImm((float) value, FLOAT, stack);
                 break;
             }
@@ -231,7 +238,6 @@ public class MV extends MethodVisitor {
                 int value = opcode - Opcodes.DCONST_0;
                 out.add("; dconst " + value);
                 out.addImm((double) value, DOUBLE, stack);
-//                stack.pushImm((float) value, FLOAT);
                 break;
             }
             // =============================================== Array Load ==
@@ -326,9 +332,11 @@ public class MV extends MethodVisitor {
             break;
             case Opcodes.DUP2: // 92 todo
             {
-                StackValue op = stack.pop();
-                stack.push(op);
-                stack.push(op);
+                out.add("; dup2");
+                StackValue op1 = stack.peek(-1);
+                StackValue op2 = stack.peek(-2);
+                stack.push(op2);
+                stack.push(op1);
             }
             break;
             case Opcodes.DUP2_X1: // 93 todo
@@ -612,13 +620,13 @@ public class MV extends MethodVisitor {
             case Opcodes.DLOAD: // 24
             case Opcodes.ALOAD: // 25
             {
-                LocalVar lv = this.vars.get(slot);
+                LocalVar lv = this.vars.get(slot,curLabel);
 
                 String type = Util.javaSignature2irType(this.cv.getStatistics().getResolver(), lv.signature);
                 String s = stack.push(type);
                 out.comment(type + "load " + slot);
-                out.add(s + " = load " + type + ", " + type + "* %" + lv.name);
-
+                //out.add(s + " = load " + type + ", " + type + "* %" + lv.name);
+                out.load(s, type, "%" + lv.name, stack);
             }
             break;
             // =============================================== Store (Store stack into local variable) ==
@@ -628,12 +636,13 @@ public class MV extends MethodVisitor {
             case Opcodes.DSTORE: // 57
             case Opcodes.ASTORE: // 58
             {
-                LocalVar lv = this.vars.get(slot);
+                LocalVar lv = this.vars.get(slot,curLabel);
                 String type = Util.javaSignature2irType(this.cv.getStatistics().getResolver(), lv.signature);
                 StackValue value = stack.pop();
                 value = out.castP1ToP2(stack, value, type);
                 out.comment(type + "store " + slot);
-                out.add("store " + value.fullName() + ", " + type + "* %" + lv.name);
+                //out.add("store " + value.fullName() + ", " + type + "* %" + lv.name);
+                out.store(type, value, "%" + lv.name, stack);
             }
             break;
             default:
@@ -778,6 +787,9 @@ public class MV extends MethodVisitor {
             break;
             case Opcodes.INVOKESTATIC: // 184
             {
+                if(methodName.equals("abs")){
+                    int debug =1;
+                }
                 JSignature s = new JSignature(this.cv.getStatistics().getResolver(), signature);
                 String classTypeName = Util.class2irType(this.cv.getStatistics().getResolver(), className);
                 String call = s.getSignatureCall(className, methodName, this.stack, null);
@@ -914,7 +926,9 @@ public class MV extends MethodVisitor {
     public void visitLabel(Label label) {
         labels.add(label.toString());
         //out.add("; label " + labels.indexOf(label) + " :" + label);
-        vars.activeVars(label.toString());
+        //vars.activeVars(label.toString());
+        curLabel=label.toString();
+        vars.addUseLabel(label.toString());
         out.add(label.toString() + ":");
     }
 
@@ -956,7 +970,7 @@ public class MV extends MethodVisitor {
     @Override
     public void visitIincInsn(int slot, int value) {
 
-        LocalVar var = this.vars.get(slot);
+        LocalVar var = this.vars.get(slot,curLabel);
         out.add("%__tmpv" + out.tmp + " = load i32, i32* %" + var.name);
         out.tmp++;
         out.add("%__tmpv" + out.tmp + " = add i32 %__tmpv" + (out.tmp - 1) + ", " + value);
@@ -992,16 +1006,10 @@ public class MV extends MethodVisitor {
 
     @Override
     public void visitMultiANewArrayInsn(String s, int dims) {
-        if (dims == 2) {
-            StackValue size2 = stack.pop();
-            StackValue size1 = stack.pop();
-
-            out.comment("Multi Dimension Array: " + s + " " + dims);
-            out.comment(size1.fullName());
-            out.comment(size2.fullName());
-            //todo
-        } else {
-            out.add("visitMultiANewArrayInsn " + s + " " + dims);
+        out.comment("; Multi Dimension Array: " + s + " " + dims);
+        List<StackValue> dimms = new ArrayList<>();
+        for (int i = 0; i < dims; i++) {
+            dimms.add(stack.pop());
         }
     }
 
@@ -1100,9 +1108,6 @@ public class MV extends MethodVisitor {
         irf.define = define;
         irf.end = "}";
         irf.parse(result);
-
-        //System.out.println(irf.toString());
-
         String str = irf.toString();
         result = str.split("\n");
 

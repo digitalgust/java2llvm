@@ -20,7 +20,6 @@ public class Main {
         String llvmPath = "./app/c/";
 
 
-
         if (args.length < 3) {
             System.out.println("Posix :");
             System.out.println("Compile java file:");
@@ -37,21 +36,23 @@ public class Main {
 
         javaSrc2class(srcPath, classesPath);
 
-        class2ll("java.lang.Object", classesPath, llvmPath);
-        class2ll("java.io.PrintStream", classesPath, llvmPath);
-        class2ll("java.lang.System", classesPath, llvmPath);
-        class2ll("java.lang.Throwable", classesPath, llvmPath);
-        class2ll("java.lang.NullPointerException", classesPath, llvmPath);
-        class2ll("java.lang.String", classesPath, llvmPath);
-        class2ll("java.lang.StringBuilder", classesPath, llvmPath);
-        class2ll("test.Test", classesPath, llvmPath);
-        class2ll("test.TestParent", classesPath, llvmPath);
+//        class2ll(classesPath, llvmPath);
+
+        conv("java.lang.Object", classesPath, llvmPath);
+        conv("java.io.PrintStream", classesPath, llvmPath);
+        conv("java.lang.System", classesPath, llvmPath);
+        conv("java.lang.Throwable", classesPath, llvmPath);
+        conv("java.lang.NullPointerException", classesPath, llvmPath);
+        conv("java.lang.String", classesPath, llvmPath);
+        conv("java.lang.StringBuilder", classesPath, llvmPath);
+        conv("test.Test", classesPath, llvmPath);
+        conv("test.TestParent", classesPath, llvmPath);
 
         //gen clinit call
         AssistLLVM.genClinits(llvmPath);
     }
 
-    static void javaSrc2class(String srcPath, String classesPath) {
+    static void javaSrc2class(String srcPath, String classesPath) throws IOException {
 
         File f = new File(classesPath);
         if (!f.exists()) {
@@ -66,7 +67,19 @@ public class Main {
 
     }
 
-    static void class2ll(String className, String classesPath, String llvmPath) throws IOException {
+    static void class2ll(String classesPath, String llvmPath) throws IOException {
+        List<String> files = new ArrayList<>();
+        MyCompiler.find(classesPath, files, null, ".class");
+        String classesAbsPath = new File(classesPath).getAbsolutePath();
+        for (String cp : files) {
+            String className = cp.substring(classesAbsPath.length() + 1);
+            className = className.replaceAll("[\\\\/]{1,}", ".");
+            className = className.replace(".class", "");
+            conv(className, classesPath, llvmPath);
+        }
+    }
+
+    static void conv(String className, String classesPath, String llvmPath) throws IOException {
 
         String outFileName = className + ".ll";
         PrintStream ps = new PrintStream(new File(llvmPath, outFileName));

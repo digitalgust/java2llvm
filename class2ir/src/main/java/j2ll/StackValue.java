@@ -8,6 +8,7 @@ public class StackValue {
     public static final int MODE_IMM = 0;
     public static final int MODE_REG = 1;
     public static final int MODE_OBJREF = 2;
+    public static final int MODE_SLOT2 = 3;
 
     private int mode;
     private Object value;

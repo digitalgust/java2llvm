@@ -9,17 +9,33 @@ void classes_clinit();
 
 void test_Test_main();
 
-int main() {
-    classes_clinit();
-    test_Test_main();
-}
-
 void print_debug(int v) {
     printf("lldebug: %d \n", v);
 }
 
 void print_ptr(long long v) {
     printf("ll_ptr: %llx (%lld)\n", v, v);
+}
+
+typedef union _SlotEntry{
+    char ch;
+    short s16;
+    unsigned short u16;
+    int s32;
+    unsigned int u32;
+    long long s64;
+    unsigned long long u64;
+    float f32;
+    double f64;
+    void *_ptr;
+}SlotEntry;
+
+int main() {
+    SlotEntry slot;
+    slot.s32=40;
+    print_ptr(slot.s64);
+    classes_clinit();
+    test_Test_main();
 }
 
 /*

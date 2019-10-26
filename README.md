@@ -1,34 +1,34 @@
 
 # java2llvm
 
-An Example Project Show Convert Java Byte Code to LLVM IR assembler , compile standalone executable file
+An Example Project Show Convert Java Byte Code to LLVM IR assembler , compile standalone executable file   
 
-This project is based on [class2ir](https://github.com/MParygin/class2ir), that based on an old llvm version.
-So I've changed some instruction syntex, and repaired bug, enhanced functional.
+This project is based on [class2ir](https://github.com/MParygin/class2ir), that based on an old llvm version.   
+So I've changed some instruction syntex, and repaired bug, enhanced functional.   
 
 ### Currently:
-Generated CentOS x64 executable file, and say "Hello world".
+Generated CentOS x64 executable file, and say "Hello world".    
 
 ### Make:
-1. Enter directory java2llvm/
-2. Run build.sh, then you will get app.exe here.
+1. Enter directory java2llvm/   
+2. Run build.sh, then you will get app.exe here.   
 
-## Request:
-CentOS 7.0 x86_64
-java 1.8
-llvm-as / llc / clang  5.0
-make
+### Request:
+ CentOS 7.0 x86_64    
+ java 1.8    
+ llvm-as / llc / clang  5.0    
+ make    
 
 ### Known issue:
-1. No GC.
-2. Maybe some of java instruction can't work, need test
-3. some of java instruction not implementation , see MV.java
-4. Object memory allocation 
+* No GC.   
+* Maybe some of java instruction can't work, need test   
+* some of java instruction not implementation , see MV.java    
+* Object memory allocation    
 
 ### change log:
-1. Add base class java.lang.*, java.io.PrintStream
-2. Add String to handle text output, StringBuilder to handle string concat
-3. Trace instruction flow , to fix register var scope bug.
+* Add base class java.lang.*, java.io.PrintStream   
+* Add String to handle text output, StringBuilder to handle string concat   
+* Trace instruction flow , to fix register var scope bug.   
 
 
 

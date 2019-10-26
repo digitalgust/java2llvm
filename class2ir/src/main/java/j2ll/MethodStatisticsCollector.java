@@ -19,7 +19,7 @@ public final class MethodStatisticsCollector extends MethodVisitor {
     @Override
     public void visitLocalVariable(String name, String sign, String s2, Label label, Label label1, int slot) {
         vars.addVar(new LocalVar(slot, name, sign));
-        Util.javaSignature2irType(this.resolver, sign);
+        String s = Util.javaSignature2irType(this.resolver, sign);
         //System.out.println(" vist localvar:%%" + name + " " + slot + " = " + sign + " from " + label + " to " + label1 + " " + s2);
         vars.parseRange(name, label.toString(), label1.toString(), slot);
     }
@@ -27,7 +27,7 @@ public final class MethodStatisticsCollector extends MethodVisitor {
     @Override
     public void visitLabel(Label label) {
 //        System.out.println(" vist label:" + label + ":");
-        vars.addLabel(label.toString());
+        vars.addParseLabel(label.toString());
     }
 
     @Override

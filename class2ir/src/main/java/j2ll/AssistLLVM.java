@@ -8,12 +8,13 @@ import java.util.List;
 
 public class AssistLLVM {
 
-    static String declares = "declare noalias i8* @malloc(i32)\n" +
+    static final String declares = "declare noalias i8* @malloc(i32)\n" +
             "declare void @free(i8*)\n" +
             "declare void @print_debug(i32)\n" +
             "declare void @print_ptr(i64)\n" +
             "declare i32 @ptr_size()\n";
 
+    static final String CHAR_ARR = "[C";
 
     static Resolver resolver = new Resolver();
     static List<String> clinitMethods = new ArrayList<>();
@@ -26,13 +27,15 @@ public class AssistLLVM {
 
             //declare
             ps.println(getAssistFuncDeclare());
-            ps.println("declare void @java_lang_String__init___C(%java_lang_String*, {i32, [0 x i16]}*)");
+            String carrIRtype = Util.javaSignature2irType(resolver, CHAR_ARR);
+            ps.println("declare void @java_lang_String__init___C(%java_lang_String* %s0, " + carrIRtype + " %s1)");
             for (String s : clinitMethods) {
                 if (s != null) ps.println("declare " + s);
             }
             ps.println("\n");
 
             ps.println(Util.class2struct(resolver, "java/lang/String"));
+            ps.println(Util.class2struct(resolver, CHAR_ARR));
             ps.println("\n");
 
             //call
@@ -45,7 +48,6 @@ public class AssistLLVM {
             ps.println("\n");
 
 
-            String carrIRtype = Util.javaSignature2irType(resolver, "[C \n");
             String funcName = getConstStringFuncName();
             String extFunc = "define " + funcName + "  {\n"
                     + "    %tmps0 = alloca " + carrIRtype + "\n"
@@ -58,7 +60,7 @@ public class AssistLLVM {
                     + "    %__tmp0 = call i8* @malloc(i32 %__memsize)\n"
                     + "    %stack1 = bitcast i8* %__tmp0 to %java_lang_String*\n"
                     + "    ;              \n"
-                    + "    call void @java_lang_String__init___C(%java_lang_String* %stack1, {i32, [0 x i16]}* %stack0) \n"
+                    + "    call void @java_lang_String__init___C(%java_lang_String* %stack1, " + carrIRtype + " %stack0) \n"
                     + "    ret %java_lang_String* %stack1\n"
                     + "}                  \n";
             ps.println(extFunc);
@@ -78,7 +80,7 @@ public class AssistLLVM {
 
     static public String getConstStringFuncName() {
         String ty = Util.javaSignature2irType(resolver, "Ljava/lang/String;"); //for add class java.lang.String declare
-        String carrIRtype = Util.javaSignature2irType(resolver, "[C \n");
+        String carrIRtype = Util.javaSignature2irType(resolver, CHAR_ARR);
         String funcName = ty + " @construct_string_with_char_arr_(" + carrIRtype + " %s0)";
         return funcName;
     }
