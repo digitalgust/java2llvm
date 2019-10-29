@@ -5,7 +5,7 @@ java -cp ./class2ir/dist/class2ir.jar:./class2ir/lib/asm-7.2.jar:./class2ir/lib/
 
 cd ./app/c/
 make
-cp ./c ../../app.exe
+cp ./c ../../a.out
 make clean 
 cd ../../
 rm -rf ./app/out/classes/*

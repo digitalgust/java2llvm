@@ -7,11 +7,11 @@ This project is based on [class2ir](https://github.com/MParygin/class2ir), that 
 So I've changed some instruction syntex, and repaired bug, enhanced functional.   
 
 ### Currently:
-Generated CentOS x64 executable file, and say "Hello world".    
+Generated CentOS_x64 and MacOS executable file, and say "Hello world".    
 
 ### Make:
 1. Enter directory java2llvm/   
-2. Run build.sh, then you will get app.exe here.   
+2. Run mac_build.sh or centos_build.sh , then you will get a.out here.   
 
 ### Requirements:
  CentOS 7.0 x86_64    
