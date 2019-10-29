@@ -101,33 +101,46 @@ public final class Util {
         throw new RuntimeException(signature);
     }
 
+
     public static List<String> javaSignatures2irTypes(Resolver resolver, String str) {
         //System.out.print("Parse ");
         //System.out.println("signatures: \"" + str + "\"");
 
         List<String> result = new ArrayList<>();
-        StringBuilder tmp = new StringBuilder();
-        char[] carr = str.toCharArray();
-        for (int i = 0; i < carr.length; i++) {
-            char c = carr[i];
-            tmp.append(c);
-            if (c == 'S' || c == 'C' || c == 'I' || c == 'J' || c == 'F' || c == 'D') { // todo all java signs
-                result.add(javaSignature2irType(resolver, tmp.toString()));
-                tmp.setLength(0);
+        String sa = str;
+        while (sa.length() > 0) {
+            char c = sa.charAt(0);
+            if (c == 'S' || c == 'B' || c == 'C' || c == 'I' || c == 'J' || c == 'F' || c == 'D') {
+                String tmp = sa.substring(0, 1);
+                result.add(javaSignature2irType(resolver, tmp));
+                sa = sa.substring(1);
             } else if (c == 'L') {
-                String s = "";
-                for (; ; i++) {
-                    c = carr[i];
-                    s += c;
-                    if (c == ';') {
+                int pos = sa.indexOf(';');
+                String tmp = sa.substring(0, pos + 1);
+                result.add(javaSignature2irType(resolver, tmp));
+                sa = sa.substring(pos + 1);
+            } else { //'['
+
+                String tmp = "";
+                //find first not '['
+                for (int i = 0; i < sa.length(); i++) {
+                    c = sa.charAt(i);
+                    tmp += c;
+                    if (sa.charAt(i) != '[') {
                         break;
                     }
                 }
-                result.add(javaSignature2irType(resolver, s));
-                tmp.setLength(0);
+                if (c == 'L') {
+                    int pos = sa.indexOf(';');
+                    tmp = sa.substring(0, pos + 1);
+                }
+                result.add(javaSignature2irType(resolver, tmp));
+                sa = sa.substring(tmp.length());
             }
         }
-        if (tmp.length() > 0) result.add(javaSignature2irType(resolver, tmp.toString()));
+
+
+
         return result;
     }
 
@@ -171,9 +184,9 @@ public final class Util {
                 return s;
             } else {
                 ClassFile c = helper.getClassFile(className);
-                if (c == null) {
-                    int debug = 1;
-                }
+//                if (c == null) {
+//                    int debug = 1;
+//                }
                 StringJoiner joiner = new StringJoiner(", ", "{", "}");
                 for (Field f : c.getFields()) {
                     joiner.add(javaSignature2irType(resolver, f.getDescription()));

@@ -41,29 +41,6 @@ public class JSignature {
         return this.result;
     }
 
-    public String getSignatureCall(String className, String methodName, RuntimeStack stack, String prefix) {
-        StringJoiner joiner = new StringJoiner(", ", this.result + " @" + getID(className, methodName) + "(", ")");
-        if (prefix != null) joiner.add(prefix);
-        List<String> pops = new ArrayList<String>();
-        for (int i = 0; i < this.args.size(); i++) {
-            pops.add(0, stack.pop().toString());
-        }
-        for (int i = 0; i < this.args.size(); i++) {
-            String arg = this.args.get(i);
-            joiner.add(arg + " " + pops.get(i));
-        }
-        return joiner.toString();
-    }
-
-    public String getSignatureDeclare(String className, String methodName, String prefix) {
-        StringJoiner joiner = new StringJoiner(", ", this.result + " @" + getID(className, methodName) + "(", ")");
-        if (prefix != null) joiner.add(prefix);
-        for (String arg : this.args) {
-            joiner.add(arg);
-        }
-        return joiner.toString();
-    }
-
     public String getID(String className, String methodName) {
         return Util.classMethodSignature2id(className, methodName, this);
     }

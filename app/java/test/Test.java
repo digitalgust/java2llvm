@@ -42,6 +42,8 @@ public class Test extends TestParent {
         System.out.println(sl);
         System.out.println(singleton.ln);
 
+        Linpack.main();
+
         long b = System.currentTimeMillis() ;
         System.out.println("end: " + b);
         System.out.println("cost : " + (b - a));

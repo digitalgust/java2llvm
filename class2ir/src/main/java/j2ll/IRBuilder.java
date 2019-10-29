@@ -5,6 +5,7 @@ import org.objectweb.asm.Label;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Stack;
+import java.util.StringJoiner;
 
 import static j2ll.Internals.*;
 
@@ -24,6 +25,34 @@ public class IRBuilder {
     public void comment(String str) {
         strings.add("; " + str);
     }
+
+
+    public String getSignatureCall(String className, String methodName, RuntimeStack stack, String prefix, JSignature sig) {
+        StringJoiner joiner = new StringJoiner(", ", sig.getResult() + " @" + sig.getID(className, methodName) + "(", ")");
+        if (prefix != null) joiner.add(prefix);
+        List<StackValue> pops = new ArrayList<>();
+        for (int i = 0; i < sig.getArgs().size(); i++) {
+            pops.add(0, stack.pop());
+        }
+        for (int i = 0; i < sig.getArgs().size(); i++) {
+            String arg = sig.getArgs().get(i);
+
+            StackValue sv = pops.get(i);
+            sv = castP1ToP2(stack, sv, arg);//convert type
+            joiner.add(arg + " " + sv.toString());
+        }
+        return joiner.toString();
+    }
+
+    public String getSignatureDeclare(String className, String methodName, String prefix, JSignature sig) {
+        StringJoiner joiner = new StringJoiner(", ", sig.getResult() + " @" + sig.getID(className, methodName) + "(", ")");
+        if (prefix != null) joiner.add(prefix);
+        for (String arg : sig.getArgs()) {
+            joiner.add(arg);
+        }
+        return joiner.toString();
+    }
+
 
     public String floatToString(Object value) {
         if (value instanceof Float) {
@@ -334,7 +363,7 @@ public class IRBuilder {
         }
         add(reg2 + " = add i32 " + reg1 + ", 4");
         add(reg3 + " = call i8* @malloc(i32 " + reg2 + ")");
-        String parent=Util.javaSignature2irType(resolver, "["+javaArrayType);
+        String parent = Util.javaSignature2irType(resolver, "[" + javaArrayType);
         String res = stack.push(parent);
         add(res + " = bitcast i8* " + reg3 + " to " + parent);
 
@@ -444,7 +473,7 @@ public class IRBuilder {
         comment("aaload " + ty);
         String resultType = Util.detype(arrayRef.getIR());
         getelementptr(sp, resultType, arrayRef, 0, 1, index.fullName()); // pointer to element of array
-        String loadType=Util.detype(resultType);
+        String loadType = Util.detype(resultType);
         String value = stack.push(loadType);
         load(value, loadType, sp, stack);
     }

@@ -13,9 +13,6 @@ public final class Resolver {
     private Set<String> classes = new CopyOnWriteArraySet<>();
 
     public String resolve(String str) {
-        if (str.startsWith("L")) {
-            int debug = 1;
-        }
 
         if (classes.add(str)) {
             //System.out.println("resolve " + str);
@@ -24,9 +21,6 @@ public final class Resolver {
     }
 
     public String resolveStruct(String str) {
-        if (str.startsWith("C")) {
-            int debug = 1;
-        }
         if (classes.add(str)) {
             //System.out.println("resolve " + str);
         }

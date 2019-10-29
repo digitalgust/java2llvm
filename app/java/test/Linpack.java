@@ -4,6 +4,7 @@ package test;
 public class Linpack {
 
     public static void main() {
+        System.out.println("start run Linpack.main()");
         run_benchmark();
     }
 

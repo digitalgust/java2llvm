@@ -257,9 +257,9 @@ public class IrBlock extends IrObject {
                 continue;
             }
 
-            if(need.name.equals("stack139")){
-                int debug=1;
-            }
+//            if(need.name.equals("stack139")){
+//                int debug=1;
+//            }
 
             String needStackName = need.name + "_stack";
             IrVariable stackVar = new IrVariable(need.type, needStackName);

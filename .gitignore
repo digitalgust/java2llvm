@@ -2,4 +2,7 @@
 ./class2ir/target
 ./class2ir/.idea
 ./app/out/classes
-./app.exe
+./app/out/production
+./a.out
+./app/c/*.ll
+

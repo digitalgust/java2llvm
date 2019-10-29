@@ -28,13 +28,13 @@ public class IrCall extends IrSentence {
         String st = p;
         String vn = "";
         if (st.indexOf("=") > 0) {
-            String[] ss = split(st,"=");
+            String[] ss = split(st, "=");
             vn = ss[0].trim();
-            st = ss[1];
+            st = ss[1].trim();
         } else {
             vn = "";
         }
-        String[] ss = split(st,"[ ,()]{1,}");
+        String[] ss = split(st, "[ ,()]{1,}");
         //[call, void, @java_io_PrintStream_println_I, %java_io_PrintStream*, %stack18, i32, %stack20]
         instName = ss[0];
         irType = ss[1];
@@ -73,8 +73,8 @@ public class IrCall extends IrSentence {
     @Override
     public String toString() {
         String s = "";
-        if (left.name.length() > 0) s += left.name;
-        s += " = " + irType + " " + instName + " (";
+        if (left.name.length() > 0) s += left.name + " = ";
+        s += instName + " " + irType + " " + funcName + "(";
         for (int i = 0; i < argsName.length; i++) {
             IrVariable irv = argsName[i];
             s += irv;

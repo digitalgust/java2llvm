@@ -61,11 +61,7 @@ public class MV extends MethodVisitor {
             this._argTypes.add(0, Util.class2irType(this.cv.getStatistics().getResolver(), cv.className));
         }
         if (isNative()) {
-            String prefix = null;
-            if (!isStatic()) {
-                prefix = Util.javaSignature2irType(cv.getStatistics().getResolver(), "L" + cv.className + ";");
-            }
-            String tmps = s.getSignatureDeclare(cv.className, methodName, null);
+            String tmps = out.getSignatureDeclare(cv.className, methodName, null, s);
             this.cv.declares.add(tmps);
         }
     }
@@ -118,10 +114,6 @@ public class MV extends MethodVisitor {
     public void visitCode() {
         out.add("__MethodEntry:");
 
-        if(methodName.equals("dgefa")){
-            int debug=1;
-        }
-
         // 1) local vars & args
         int cntSlot = 0, cntArgs = 0;
         for (; ; ) {
@@ -130,7 +122,7 @@ public class MV extends MethodVisitor {
                 break;
             }
             cntSlot++;
-            boolean doubleslot=false;
+            boolean doubleslot = false;
             for (LocalVar lv : lvs) {
 
                 // local var
@@ -146,7 +138,7 @@ public class MV extends MethodVisitor {
                     cntArgs++;
                 }
             }
-            if(doubleslot){
+            if (doubleslot) {
                 cntSlot++;
             }
         }
@@ -620,7 +612,7 @@ public class MV extends MethodVisitor {
             case Opcodes.DLOAD: // 24
             case Opcodes.ALOAD: // 25
             {
-                LocalVar lv = this.vars.get(slot,curLabel);
+                LocalVar lv = this.vars.get(slot, curLabel);
 
                 String type = Util.javaSignature2irType(this.cv.getStatistics().getResolver(), lv.signature);
                 String s = stack.push(type);
@@ -636,7 +628,7 @@ public class MV extends MethodVisitor {
             case Opcodes.DSTORE: // 57
             case Opcodes.ASTORE: // 58
             {
-                LocalVar lv = this.vars.get(slot,curLabel);
+                LocalVar lv = this.vars.get(slot, curLabel);
                 String type = Util.javaSignature2irType(this.cv.getStatistics().getResolver(), lv.signature);
                 StackValue value = stack.pop();
                 value = out.castP1ToP2(stack, value, type);
@@ -720,32 +712,20 @@ public class MV extends MethodVisitor {
             case Opcodes.INVOKEVIRTUAL: // 182
             {
                 JSignature s = new JSignature(this.cv.getStatistics().getResolver(), signature);
-                RuntimeStack tmp = new RuntimeStack();
-                for (int i = 0; i < s.getArgs().size(); i++) {
-                    tmp.push(stack.pop());
-                }
-                StackValue th = stack.pop(); //this
-                for (int i = 0; i < s.getArgs().size(); i++) {
-                    StackValue sv = tmp.pop();
-                    String ir2 = s.getArgs().get(i);
-                    sv = out.castP1ToP2(stack, sv, ir2);//convert type
-                    stack.push(sv);
-                }
-                String classTypeName = Util.class2irType(this.cv.getStatistics().getResolver(), className);
-                String call = s.getSignatureCall(className, methodName, this.stack, th.fullName());
+                String classIr = Util.class2irType(this.cv.getStatistics().getResolver(), className);
+                s.getArgs().add(0, classIr);
+
+                String call = out.getSignatureCall(className, methodName, this.stack, null, s);
                 if ("void".equals(s.getResult())) {
-//                    out.add("call virt " + call);//gust
                     out.add("call  " + call); //todo
                 } else {
                     String op = stack.push(s.getResult());
-//                    out.add(op + " = call virt " + call);//gust
                     out.add(op + " = call " + call);//todo
                 }
                 // declare
                 boolean inClass = this.cv.className.equals(className);
                 if (!inClass) {
-                    String tmps = s.getSignatureDeclare(className, methodName, classTypeName);
-//                    call = call.replaceAll("\\%stack[0-9]{1,3}", "");
+                    String tmps = out.getSignatureDeclare(className, methodName, null, s);
                     this.cv.declares.add(tmps);
                 }
             }
@@ -753,24 +733,9 @@ public class MV extends MethodVisitor {
             case Opcodes.INVOKESPECIAL: // 183
             {
                 JSignature s = new JSignature(this.cv.getStatistics().getResolver(), signature);
-                RuntimeStack tmp = new RuntimeStack();
-                for (int i = 0; i < s.getArgs().size(); i++) {
-                    tmp.push(stack.pop());
-                }
-                StackValue th = stack.pop(); //this
-                for (int i = 0; i < s.getArgs().size(); i++) {
-                    stack.push(tmp.pop());
-                }
-                String classTypeName = Util.class2irType(this.cv.getStatistics().getResolver(), className);
-                String call = "";
-                if (!classTypeName.equals(th.getIR())) {
-                    this.cv.getStatistics().getResolver().resolve(className);
-                    String bitcast = "%__cast_" + th.getValue() + " = bitcast " + th.fullName() + " to " + classTypeName;
-                    out.add(bitcast);
-                    call = s.getSignatureCall(className, methodName, this.stack, classTypeName + " " + "%__cast_" + th.getValue());
-                } else {
-                    call = s.getSignatureCall(className, methodName, this.stack, th.fullName());
-                }
+                String classIr = Util.class2irType(this.cv.getStatistics().getResolver(), className);
+                s.getArgs().add(0, classIr);
+                String call = out.getSignatureCall(className, methodName, this.stack, null, s);
                 if ("void".equals(s.getResult())) {
                     out.add("call " + call + " ; special call private or <init>");
                 } else {
@@ -780,19 +745,15 @@ public class MV extends MethodVisitor {
                 // declare
                 boolean inClass = this.cv.className.equals(className);
                 if (!inClass) {
-                    String tmps = s.getSignatureDeclare(className, methodName, classTypeName);
+                    String tmps = out.getSignatureDeclare(className, methodName, null, s);
                     this.cv.declares.add(tmps);
                 }
             }
             break;
             case Opcodes.INVOKESTATIC: // 184
             {
-                if(methodName.equals("abs")){
-                    int debug =1;
-                }
                 JSignature s = new JSignature(this.cv.getStatistics().getResolver(), signature);
-                String classTypeName = Util.class2irType(this.cv.getStatistics().getResolver(), className);
-                String call = s.getSignatureCall(className, methodName, this.stack, null);
+                String call = out.getSignatureCall(className, methodName, this.stack, null, s);
                 if ("void".equals(s.getResult())) {
                     out.add("call " + call);
                 } else {
@@ -802,34 +763,16 @@ public class MV extends MethodVisitor {
                 // declare
                 boolean inClass = this.cv.className.equals(className);
                 if (!inClass) {
-                    String tmps = s.getSignatureDeclare(className, methodName, null);
+                    String tmps = out.getSignatureDeclare(className, methodName, null, s);
                     this.cv.declares.add(tmps);
                 }
             }
             break;
-//            case Opcodes.INVOKEINTERFACE: // 185
-//            {
-//                _JavaSignature s = new _JavaSignature(this.cv.getStatistics().getResolver(), signature);
-//                String classTypeName = Util.class2irType(this.cv.getStatistics().getResolver(), className);
-//                String call = s.getSignatureCall(className, methodName, this.stack, null);
-//                if ("void".equals(s.getResult())) {
-//                    out.add("call int " + call);
-//                } else {
-//                    String op = stack.push(s.getResult());
-//                    out.add(op + " = call int " + call);
-//                }
-//                // declare
-//                if (!this.cv.className.equals(className)) {
-//                    String tmps=s.getSignatureDeclare(className, methodName,classTypeName);
-//                    this.cv.declares.add(new _MethodDeclare(className, methodName, signature, tmps));
-//                }
-//            }
-//            break;
             case Opcodes.INVOKEDYNAMIC: // 186
             {
                 JSignature s = new JSignature(this.cv.getStatistics().getResolver(), signature);
                 String classTypeName = Util.class2irType(this.cv.getStatistics().getResolver(), className);
-                String call = s.getSignatureCall(className, methodName, this.stack, null);
+                String call = out.getSignatureCall(className, methodName, this.stack, null, s);
                 if ("void".equals(s.getResult())) {
                     out.add("call dyn " + call);
                 } else {
@@ -839,7 +782,7 @@ public class MV extends MethodVisitor {
                 // declare
                 boolean inClass = this.cv.className.equals(className);
                 if (!inClass) {
-                    String tmps = s.getSignatureDeclare(className, methodName, classTypeName);
+                    String tmps = out.getSignatureDeclare(className, methodName, classTypeName, s);
                     this.cv.declares.add(tmps);
                 }
             }
@@ -927,7 +870,7 @@ public class MV extends MethodVisitor {
         labels.add(label.toString());
         //out.add("; label " + labels.indexOf(label) + " :" + label);
         //vars.activeVars(label.toString());
-        curLabel=label.toString();
+        curLabel = label.toString();
         vars.addUseLabel(label.toString());
         out.add(label.toString() + ":");
     }
@@ -941,27 +884,22 @@ public class MV extends MethodVisitor {
 
     @Override
     public void visitLdcInsn(Object o) {
-
+        out.add("; ldc " + o);
         if (o instanceof String) {
             // const
             out.newString(cv, stack, (String) o);
         } else if (o instanceof Integer) {
             Integer value = (Integer) o;
             out.addImm(value, INT, stack);
-            out.add("; ldc " + value);
         } else if (o instanceof Long) {
             Long value = (Long) o;
             out.addImm(value, LONG, stack);
-            out.add("; ldc " + value);
         } else if (o instanceof Float) {
             Float value = (Float) o;
             out.addImm(value, FLOAT, stack);
-//            stack.pushImm(value, FLOAT);
-            out.add("; ldc " + value);
         } else if (o instanceof Double) {
             Double value = (Double) o;
             out.addImm(value, DOUBLE, stack);
-            out.add("; ldc " + value);
         } else {
             out.add("; todo add const " + o);
         }
@@ -970,7 +908,7 @@ public class MV extends MethodVisitor {
     @Override
     public void visitIincInsn(int slot, int value) {
 
-        LocalVar var = this.vars.get(slot,curLabel);
+        LocalVar var = this.vars.get(slot, curLabel);
         out.add("%__tmpv" + out.tmp + " = load i32, i32* %" + var.name);
         out.tmp++;
         out.add("%__tmpv" + out.tmp + " = add i32 %__tmpv" + (out.tmp - 1) + ", " + value);
