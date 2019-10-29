@@ -13,7 +13,7 @@ Generated CentOS x64 executable file, and say "Hello world".
 1. Enter directory java2llvm/   
 2. Run build.sh, then you will get app.exe here.   
 
-### Request:
+### Requirements:
  CentOS 7.0 x86_64    
  java 1.8    
  llvm-as / llc / clang  5.0    
