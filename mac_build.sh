@@ -5,9 +5,10 @@ java -cp ./class2ir/dist/class2ir.jar:./class2ir/lib/asm-7.2.jar:./class2ir/lib/
 
 cd ./app/c/
 llvm-gcc *.c *.ll
-cp ./a.out ../../a.out 
+cp ./a.out ../../a.out
 rm *.ll a.out
 cd ../../
 rm -rf ./app/out/classes/*
 rm -rf ./class2ir/target
 echo success
+

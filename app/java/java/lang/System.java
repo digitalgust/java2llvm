@@ -3,7 +3,7 @@ package java.lang;
 import java.io.PrintStream;
 
 public class System {
-    static public PrintStream out=new PrintStream();
+    static public PrintStream out;
 
     static public native long currentTimeMillis();
 

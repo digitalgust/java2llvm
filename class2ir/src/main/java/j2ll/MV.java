@@ -1,5 +1,6 @@
 package j2ll;
 
+import j2ll.graph.IrFunction;
 import org.objectweb.asm.*;
 
 import java.io.PrintStream;
@@ -31,7 +32,7 @@ public class MV extends MethodVisitor {
     // buffer
     IRBuilder out = new IRBuilder();
     // stack
-    //RuntimeStack stack = new RuntimeStack();
+    RuntimeStack stack = new RuntimeStack();
     Stack<String> commands = new Stack<>();
     // labels
     List<String> labels = new ArrayList<>();
@@ -51,10 +52,6 @@ public class MV extends MethodVisitor {
         this.vars = cv.getStatistics().get(methodName + javaSignature);
         this.cv = cv;
 
-        if(methodName.equals("main")){
-            int debug=1;
-        }
-
         // signature
         JSignature s = new JSignature(cv.getStatistics().getResolver(), this.javaSignature);
         _argTypes = s.getArgs();
@@ -64,7 +61,7 @@ public class MV extends MethodVisitor {
             this._argTypes.add(0, Util.class2irType(this.cv.getStatistics().getResolver(), cv.className));
         }
         if (isNative()) {
-            String tmps = s.getSignatureDeclare(cv.className, methodName, null);
+            String tmps = out.getSignatureDeclare(cv.className, methodName, null, s);
             this.cv.declares.add(tmps);
         }
     }
@@ -116,33 +113,76 @@ public class MV extends MethodVisitor {
     @Override
     public void visitCode() {
         out.add("__MethodEntry:");
-        out.add("%func_stack = alloca %struct.StackFrame*");
-        out.add("%thrd_stack_reg = load %struct.StackFrame*, %struct.StackFrame** @pthd_stack");
-        out.add("store %struct.StackFrame* %thrd_stack_reg, %struct.StackFrame** %func_stack");
-        out.add("%local_var = call %union.StackEntry* @get_sp(%struct.StackFrame* %thrd_stack_reg)");
-        int para_this = 1;
-        if (isStatic()) {
-            para_this = 0;
-        }
-        out.add("call void @chg_sp(%struct.StackFrame* %thrd_stack_reg, i32 " + (vars.getMaxSlot() + para_this) + ")");
 
-        if(methodName.equals("main")){
-            int debug=1;
-        }
+        // 1) local vars & args
+        int cntSlot = 0, cntArgs = 0;
+        for (; ; ) {
+            List<LocalVar> lvs = vars.getBySlot(cntSlot);
+            if (lvs.isEmpty()) {
+                break;
+            }
+            cntSlot++;
+            boolean doubleslot = false;
+            for (LocalVar lv : lvs) {
 
-        int slotCount = 0;
-        for (int i = 0; i < this._argTypes.size(); i++, slotCount++) {
-            String argType = this._argTypes.get(i);
-            out.genSetLocalVarCode(argType, slotCount, " %s" + slotCount);
-            if (argType.equals(LONG) || argType.equals(DOUBLE)) {
-                slotCount += 1;
+                // local var
+                out.add("    ");
+                out.add("%" + lv.name + " = alloca " + Util.javaSignature2irType(this.cv.getStatistics().getResolver(), lv.signature) + "\t\t; slot " + lv.slot + " = " + lv.signature);
+                if (lv.signature.equals("J") || lv.signature.equals("D")) {
+                    doubleslot = true;
+                }
+                // init from arg (!)
+                if (cntArgs < this._argTypes.size()) {
+                    String argType = this._argTypes.get(cntArgs);
+                    out.add("    store " + argType + " %s" + lv.slot + ", " + argType + "* %" + lv.name);
+                    cntArgs++;
+                }
+            }
+            if (doubleslot) {
+                cntSlot++;
             }
         }
-
     }
 
     @Override
     public void visitFrame(int type, int numLocal, Object[] local, int numStack, Object[] stackitems) {
+        //out.add("; TODO FRame: " + i + " " + i1 + " " + i2);
+        out.add("; type " + type + ", local " + numLocal + " " + Arrays.toString(local) + "," + " stack " + numStack + " " + Arrays.toString(stackitems));
+        //vars.activeByFrame(type, numLocal, local);
+
+        switch (type) {
+            case org.objectweb.asm.Opcodes.F_APPEND: { //1
+
+                break;
+            }
+            case org.objectweb.asm.Opcodes.F_CHOP: {//2
+
+                break;
+            }
+            case org.objectweb.asm.Opcodes.F_FULL: {//0
+                //System.out.println("expect:" + numStack + "  real:" + stack.size());
+                while (stack.size() > numStack) {
+                    StackValue sv = stack.pop();
+                    out.add(";pop a var from stack NEED FIX :" + sv.fullName());
+                }
+                if (stack.size() < numStack) {
+                    throw new RuntimeException("todo gust");
+                }
+                break;
+            }
+            case org.objectweb.asm.Opcodes.F_NEW: {//-1
+                break;
+            }
+            case org.objectweb.asm.Opcodes.F_SAME: {//3
+                break;
+            }
+            case org.objectweb.asm.Opcodes.F_SAME1: {//4
+                break;
+            }
+            default: {
+                break;
+            }
+        }
     }
 
     @Override
@@ -152,7 +192,7 @@ public class MV extends MethodVisitor {
                 break;
             // =============================================== Constants ==
             case Opcodes.ACONST_NULL: // 1
-                out.genPushCode(POINTER, "null");
+                out.add("const null"); //todo
                 break;
             case Opcodes.ICONST_M1: // 2
             case Opcodes.ICONST_0: // 3
@@ -164,7 +204,7 @@ public class MV extends MethodVisitor {
             {
                 int value = opcode - Opcodes.ICONST_0;
                 out.add("; iconst_" + value);
-                out.genPushCode(INT, "" + value);
+                out.addImm(value, INT, stack);
                 break;
             }
             case Opcodes.LCONST_0: // 9
@@ -172,7 +212,7 @@ public class MV extends MethodVisitor {
             {
                 int value = opcode - Opcodes.LCONST_0;
                 out.add("; lconst " + value);
-                out.genPushCode(LONG, "" + value);
+                out.addImm((long) value, LONG, stack);
                 break;
             }
             case Opcodes.FCONST_0: // 11
@@ -181,7 +221,7 @@ public class MV extends MethodVisitor {
             {
                 int value = opcode - Opcodes.FCONST_0;
                 out.add("; fconst " + value);
-                out.genPushCode(FLOAT, out.floatToString((float) value));
+                out.addImm((float) value, FLOAT, stack);
                 break;
             }
             case Opcodes.DCONST_0: // 14
@@ -189,379 +229,308 @@ public class MV extends MethodVisitor {
             {
                 int value = opcode - Opcodes.DCONST_0;
                 out.add("; dconst " + value);
-                out.genPushCode(DOUBLE, out.floatToString((double) value));
+                out.addImm((double) value, DOUBLE, stack);
                 break;
             }
             // =============================================== Array Load ==
             case Opcodes.IALOAD: // 46
-                out.arrload(cv.getStatistics().getResolver(), "I");
+                out.arrload(stack, cv.getStatistics().getResolver(), "I");
                 break;
             case Opcodes.LALOAD: // 47
-                out.arrload(cv.getStatistics().getResolver(), "J");
+                out.arrload(stack, cv.getStatistics().getResolver(), "J");
                 break;
             case Opcodes.FALOAD: // 48
-                out.arrload(cv.getStatistics().getResolver(), "F");
+                out.arrload(stack, cv.getStatistics().getResolver(), "F");
                 break;
             case Opcodes.DALOAD: // 49
-                out.arrload(cv.getStatistics().getResolver(), "D");
+                out.arrload(stack, cv.getStatistics().getResolver(), "D");
                 break;
             case Opcodes.AALOAD: // 50
-                out.arrload(cv.getStatistics().getResolver(), "Ljava/lang/Object;");
+                out.aaload(stack);
                 break;
             case Opcodes.BALOAD: // 51
-                out.arrload(cv.getStatistics().getResolver(), "B");
+                out.arrload(stack, cv.getStatistics().getResolver(), "B");
                 break;
             case Opcodes.CALOAD: // 52
-                out.arrload(cv.getStatistics().getResolver(), "C");
+                out.arrload(stack, cv.getStatistics().getResolver(), "C");
                 break;
             case Opcodes.SALOAD: // 53
-                out.arrload(cv.getStatistics().getResolver(), "S");
+                out.arrload(stack, cv.getStatistics().getResolver(), "S");
                 break;
             // =============================================== Array Store ==
             case Opcodes.IASTORE: // 79
-                out.arrstore(cv.getStatistics().getResolver(), "I");
+                out.arrstore(stack, INT);
                 break;
             case Opcodes.LASTORE: // 80
-                out.arrstore(cv.getStatistics().getResolver(), "J");
+                out.arrstore(stack, LONG);
                 break;
             case Opcodes.FASTORE: // 81
-                out.arrstore(cv.getStatistics().getResolver(), "F");
+                out.arrstore(stack, FLOAT);
                 break;
             case Opcodes.DASTORE: // 82
-                out.arrstore(cv.getStatistics().getResolver(), "D");
+                out.arrstore(stack, DOUBLE);
                 break;
             case Opcodes.AASTORE: // 83
-                out.arrstore(cv.getStatistics().getResolver(), "Ljava/lang/Object;");
+                out.aastore(stack); //
                 break;
             case Opcodes.BASTORE: // 84
-                out.arrstore(cv.getStatistics().getResolver(), "B");
+                out.arrstore(stack, BYTE); // todo array
                 break;
             case Opcodes.CASTORE: // 85
-                out.arrstore(cv.getStatistics().getResolver(), "C");
+                out.arrstore(stack, CHAR); // todo array
                 break;
             case Opcodes.SASTORE: // 86
-                out.arrstore(cv.getStatistics().getResolver(), "S");
+                out.arrstore(stack, SHORT); // todo array
                 break;
             // =============================================== Array Store ==
             case Opcodes.POP: // 87 todo
-//                stack.pop();
+                stack.pop();
                 out.add("; pop");
-                out.add("call i64 @pop_entry(%struct.StackFrame* %thrd_stack_reg)");
                 break;
             case Opcodes.POP2: // 88 todo
-//                stack.pop();
-//                stack.pop();
+                stack.pop();
+                stack.pop();
                 out.add("; pop2");
-                out.add("call i64 @pop_entry(%struct.StackFrame* %thrd_stack_reg)");
-                out.add("call i64 @pop_entry(%struct.StackFrame* %thrd_stack_reg)");
                 break;
             case Opcodes.DUP: // 89 todo
             {
-//                StackValue _op = stack.pop();
-//                stack.push(_op);
-//                stack.push(_op);
-
+                StackValue _op = stack.pop();
+                stack.push(_op);
+                stack.push(_op);
                 out.add("; dup");
-
-                String v1 = out.allocReg();
-                out.add(v1 + " = call i64 @pop_entry(%struct.StackFrame* %thrd_stack_reg)");
-                out.add("call void @push_entry(%struct.StackFrame* %thrd_stack_reg, i64 " + v1 + ")");
-                out.add("call void @push_entry(%struct.StackFrame* %thrd_stack_reg, i64 " + v1 + ")");
             }
             break;
             case Opcodes.DUP_X1: // 90 todo
             {
-//                StackValue _op1 = stack.pop();
-//                StackValue _op2 = stack.pop();
-//                stack.push(_op1);
-//                stack.push(_op2);
-//                stack.push(_op1);
+                StackValue _op1 = stack.pop();
+                StackValue _op2 = stack.pop();
+                stack.push(_op1);
+                stack.push(_op2);
+                stack.push(_op1);
                 out.add("; dup x1");
-                String v1 = out.allocReg();
-                out.add(v1 + " = call i64 @pop_entry(%struct.StackFrame* %thrd_stack_reg)");
-                String v2 = out.allocReg();
-                out.add(v2 + " = call i64 @pop_entry(%struct.StackFrame* %thrd_stack_reg)");
-                out.add("call void @push_entry(%struct.StackFrame* %thrd_stack_reg, i64 " + v1 + ")");
-                out.add("call void @push_entry(%struct.StackFrame* %thrd_stack_reg, i64 " + v2 + ")");
-                out.add("call void @push_entry(%struct.StackFrame* %thrd_stack_reg, i64 " + v1 + ")");
-
             }
             break;
             case Opcodes.DUP_X2: // 91 todo
             {
-//                StackValue _op1 = stack.pop();
-//                StackValue _op2 = stack.pop();
-//                StackValue _op3 = stack.pop();
-//                stack.push(_op1);
-//                stack.push(_op3);
-//                stack.push(_op2);
-//                stack.push(_op1);
+                StackValue _op1 = stack.pop();
+                StackValue _op2 = stack.pop();
+                StackValue _op3 = stack.pop();
+                stack.push(_op1);
+                stack.push(_op3);
+                stack.push(_op2);
+                stack.push(_op1);
                 out.add("; dup x2");
-                String v1 = out.allocReg();
-                out.add(v1 + " = call i64 @pop_entry(%struct.StackFrame* %thrd_stack_reg)");
-                String v2 = out.allocReg();
-                out.add(v2 + " = call i64 @pop_entry(%struct.StackFrame* %thrd_stack_reg)");
-                String v3 = out.allocReg();
-                out.add(v3 + " = call i64 @pop_entry(%struct.StackFrame* thrd_stack_reg)");
-                out.add("call void @push_entry(%struct.StackFrame* %thrd_stack_reg, i64 " + v1 + ")");
-                out.add("call void @push_entry(%struct.StackFrame* %thrd_stack_reg, i64 " + v3 + ")");
-                out.add("call void @push_entry(%struct.StackFrame* %thrd_stack_reg, i64 " + v2 + ")");
-                out.add("call void @push_entry(%struct.StackFrame* %thrd_stack_reg, i64 " + v1 + ")");
-
             }
             break;
             case Opcodes.DUP2: // 92 todo
             {
                 out.add("; dup2");
-//                StackValue op1 = stack.peek(-1);
-//                StackValue op2 = stack.peek(-2);
-//                stack.push(op2);
-//                stack.push(op1);
-                String v1 = out.allocReg();
-                out.add(v1 + " = call i64 @pop_entry(%struct.StackFrame* %thrd_stack_reg)");
-                String v2 = out.allocReg();
-                out.add(v2 + " = call i64 @pop_entry(%struct.StackFrame* %thrd_stack_reg)");
-                out.add("call void @push_entry(%struct.StackFrame* %thrd_stack_reg, i64 " + v2 + ")");
-                out.add("call void @push_entry(%struct.StackFrame* %thrd_stack_reg, i64 " + v1 + ")");
-                out.add("call void @push_entry(%struct.StackFrame* %thrd_stack_reg, i64 " + v2 + ")");
-                out.add("call void @push_entry(%struct.StackFrame* %thrd_stack_reg, i64 " + v1 + ")");
-
+                StackValue op1 = stack.peek(-1);
+                StackValue op2 = stack.peek(-2);
+                stack.push(op2);
+                stack.push(op1);
             }
             break;
             case Opcodes.DUP2_X1: // 93 todo
             {
-//                StackValue _op1 = stack.pop();
-//                StackValue _op2 = stack.pop();
-//                StackValue _op3 = stack.pop();
-//                stack.push(_op2);
-//                stack.push(_op1);
-//                stack.push(_op3);
-//                stack.push(_op2);
-//                stack.push(_op1);
-                String v1 = out.allocReg();
-                out.add(v1 + " = call i64 @pop_entry(%struct.StackFrame* %thrd_stack_reg)");
-                String v2 = out.allocReg();
-                out.add(v2 + " = call i64 @pop_entry(%struct.StackFrame* %thrd_stack_reg)");
-                String v3 = out.allocReg();
-                out.add(v3 + " = call i64 @pop_entry(%struct.StackFrame* thrd_stack_reg)");
-                out.add("call void @push_entry(%struct.StackFrame* %thrd_stack_reg, i64 " + v2 + ")");
-                out.add("call void @push_entry(%struct.StackFrame* %thrd_stack_reg, i64 " + v1 + ")");
-                out.add("call void @push_entry(%struct.StackFrame* %thrd_stack_reg, i64 " + v3 + ")");
-                out.add("call void @push_entry(%struct.StackFrame* %thrd_stack_reg, i64 " + v2 + ")");
-                out.add("call void @push_entry(%struct.StackFrame* %thrd_stack_reg, i64 " + v1 + ")");
-
+                StackValue _op1 = stack.pop();
+                StackValue _op2 = stack.pop();
+                StackValue _op3 = stack.pop();
+                stack.push(_op2);
+                stack.push(_op1);
+                stack.push(_op3);
+                stack.push(_op2);
+                stack.push(_op1);
             }
             break;
             case Opcodes.DUP2_X2: // 94 todo
             {
-//                StackValue _op1 = stack.pop();
-//                StackValue _op2 = stack.pop();
-//                StackValue _op3 = stack.pop();
-//                StackValue _op4 = stack.pop();
-//                stack.push(_op2);
-//                stack.push(_op1);
-//                stack.push(_op4);
-//                stack.push(_op3);
-//                stack.push(_op2);
-//                stack.push(_op1);
-                String v1 = out.allocReg();
-                out.add(v1 + " = call i64 @pop_entry(%struct.StackFrame* %thrd_stack_reg)");
-                String v2 = out.allocReg();
-                out.add(v2 + " = call i64 @pop_entry(%struct.StackFrame* %thrd_stack_reg)");
-                String v3 = out.allocReg();
-                out.add(v3 + " = call i64 @pop_entry(%struct.StackFrame* %thrd_stack_reg)");
-                String v4 = out.allocReg();
-                out.add(v4 + " = call i64 @pop_entry(%struct.StackFrame* thrd_stack_reg)");
-                out.add("call void @push_entry(%struct.StackFrame* %thrd_stack_reg, i64 " + v2 + ")");
-                out.add("call void @push_entry(%struct.StackFrame* %thrd_stack_reg, i64 " + v1 + ")");
-                out.add("call void @push_entry(%struct.StackFrame* %thrd_stack_reg, i64 " + v4 + ")");
-                out.add("call void @push_entry(%struct.StackFrame* %thrd_stack_reg, i64 " + v3 + ")");
-                out.add("call void @push_entry(%struct.StackFrame* %thrd_stack_reg, i64 " + v2 + ")");
-                out.add("call void @push_entry(%struct.StackFrame* %thrd_stack_reg, i64 " + v1 + ")");
-
+                StackValue _op1 = stack.pop();
+                StackValue _op2 = stack.pop();
+                StackValue _op3 = stack.pop();
+                StackValue _op4 = stack.pop();
+                stack.push(_op2);
+                stack.push(_op1);
+                stack.push(_op4);
+                stack.push(_op3);
+                stack.push(_op2);
+                stack.push(_op1);
             }
             break;
             case Opcodes.SWAP: // 95 (Swap only first class values)
             {
-//                StackValue _op1 = stack.pop();
-//                StackValue _op2 = stack.pop();
-//                stack.push(_op1);
-//                stack.push(_op2);
-                String v1 = out.allocReg();
-                out.add(v1 + " = call i64 @pop_entry(%struct.StackFrame* %thrd_stack_reg)");
-                String v2 = out.allocReg();
-                out.add(v2 + " = call i64 @pop_entry(%struct.StackFrame* %thrd_stack_reg)");
-                out.add("call void @push_entry(%struct.StackFrame* %thrd_stack_reg, i64 " + v1 + ")");
-                out.add("call void @push_entry(%struct.StackFrame* %thrd_stack_reg, i64 " + v2 + ")");
-
+                StackValue _op1 = stack.pop();
+                StackValue _op2 = stack.pop();
+                stack.push(_op1);
+                stack.push(_op2);
             }
             break;
             // =============================================== ADD ==
             case Opcodes.IADD: // 96
-                out.in2out1("add", INT);
+                out.in2out1(stack, "add", INT);
                 break;
             case Opcodes.LADD: // 97
-                out.in2out1("add", LONG);
+                out.in2out1(stack, "add", LONG);
                 break;
             case Opcodes.FADD: // 98
-                out.in2out1("fadd", FLOAT);
+                out.in2out1(stack, "fadd", FLOAT);
                 break;
             case Opcodes.DADD: // 99
-                out.in2out1("fadd", DOUBLE);
+                out.in2out1(stack, "fadd", DOUBLE);
                 break;
             // =============================================== SUB ==
             case Opcodes.ISUB: // 100
-                out.in2out1("sub", INT);
+                out.in2out1(stack, "sub", INT);
                 break;
             case Opcodes.LSUB: // 101
-                out.in2out1("sub", LONG);
+                out.in2out1(stack, "sub", LONG);
                 break;
             case Opcodes.FSUB: // 102
-                out.in2out1("fsub", FLOAT);
+                out.in2out1(stack, "fsub", FLOAT);
                 break;
             case Opcodes.DSUB: // 103
-                out.in2out1("fsub", DOUBLE);
+                out.in2out1(stack, "fsub", DOUBLE);
                 break;
             // =============================================== MUL ==
             case Opcodes.IMUL: // 104
-                out.in2out1("mul", INT);
+                out.in2out1(stack, "mul", INT);
                 break;
             case Opcodes.LMUL: // 105
-                out.in2out1("mul", LONG);
+                out.in2out1(stack, "mul", LONG);
                 break;
             case Opcodes.FMUL: // 106
-                out.in2out1("fmul", FLOAT);
+                out.in2out1(stack, "fmul", FLOAT);
                 break;
             case Opcodes.DMUL: // 107
-                out.in2out1("fmul", DOUBLE);
+                out.in2out1(stack, "fmul", DOUBLE);
                 break;
             // =============================================== DIV ==
             case Opcodes.IDIV: // 108
-                out.in2out1("sdiv", INT);
+                out.in2out1(stack, "sdiv", INT);
                 break;
             case Opcodes.LDIV: // 109
-                out.in2out1("sdiv", LONG);
+                out.in2out1(stack, "sdiv", LONG);
                 break;
             case Opcodes.FDIV: // 110
-                out.in2out1("fdiv", FLOAT);
+                out.in2out1(stack, "fdiv", FLOAT);
                 break;
             case Opcodes.DDIV: // 111
-                out.in2out1("fdiv", DOUBLE);
+                out.in2out1(stack, "fdiv", DOUBLE);
                 break;
             // =============================================== REM ==
             case Opcodes.IREM: // 112
-                out.in2out1("srem", INT);
+                out.in2out1(stack, "srem", INT);
                 break;
             case Opcodes.LREM: // 113
-                out.in2out1("srem", LONG);
+                out.in2out1(stack, "srem", LONG);
                 break;
             case Opcodes.FREM: // 114
-                out.in2out1("frem", FLOAT);
+                out.in2out1(stack, "frem", FLOAT);
                 break;
             case Opcodes.DREM: // 115
-                out.in2out1("frem", DOUBLE);
+                out.in2out1(stack, "frem", DOUBLE);
                 break;
             // =============================================== NEG ==
             case Opcodes.INEG: // 116
-                out.neg(INT);
+                out.neg(stack, INT);
                 break;
             case Opcodes.LNEG: // 117
-                out.neg(LONG);
+                out.neg(stack, LONG);
                 break;
             case Opcodes.FNEG: // 118
-                out.neg(FLOAT);
+                out.neg(stack, FLOAT);
                 break;
             case Opcodes.DNEG: // 119
-                out.neg(DOUBLE);
+                out.neg(stack, DOUBLE);
                 break;
             // =============================================== SH* ==
             case Opcodes.ISHL: // 120
-                out.in2out1("shl", INT);
+                out.in2out1(stack, "shl", INT);
                 break;
             case Opcodes.LSHL: // 121
-                out.operationto("sext", INT, LONG); // extend stack to long (!)
-                out.in2out1("shl", LONG);
+                out.operationto(stack, "sext", LONG); // extend stack to long (!)
+                out.in2out1(stack, "shl", LONG);
                 break;
             case Opcodes.ISHR: // 122
-                out.in2out1("ashr", INT);
+                out.in2out1(stack, "ashr", INT);
                 break;
             case Opcodes.LSHR: // 123
-                out.operationto("sext", INT, LONG); // extend stack to long (!)
-                out.in2out1("ashr", LONG);
+                out.operationto(stack, "sext", LONG); // extend stack to long (!)
+                out.in2out1(stack, "ashr", LONG);
                 break;
             case Opcodes.IUSHR: // 124
-                out.in2out1("lshr", INT);
+                out.in2out1(stack, "lshr", INT);
                 break;
             case Opcodes.LUSHR: // 125
-                out.operationto("sext", INT, LONG); // extend stack to long (!)
-                out.in2out1("lshr", LONG);
+                out.operationto(stack, "sext", LONG); // extend stack to long (!)
+                out.in2out1(stack, "lshr", LONG);
                 break;
             // =============================================== AND ==
             case Opcodes.IAND: // 126
-                out.in2out1("and", INT);
+                out.in2out1(stack, "and", INT);
                 break;
             case Opcodes.LAND: // 127
-                out.in2out1("and", LONG);
+                out.in2out1(stack, "and", LONG);
                 break;
             // =============================================== OR ==
             case Opcodes.IOR: // 128
-                out.in2out1("or", INT);
+                out.in2out1(stack, "or", INT);
                 break;
             case Opcodes.LOR: // 129
-                out.in2out1("or", LONG);
+                out.in2out1(stack, "or", LONG);
                 break;
             // =============================================== XOR ==
             case Opcodes.IXOR: // 130
-                out.in2out1("xor", INT);
+                out.in2out1(stack, "xor", INT);
                 break;
             case Opcodes.LXOR: // 131
-                out.in2out1("xor", LONG);
+                out.in2out1(stack, "xor", LONG);
                 break;
             // =============================================== converts ==
             case Opcodes.I2L: // 133
-                out.operationto("sext", INT, LONG);
+                out.operationto(stack, "sext", LONG);
                 break;
             case Opcodes.I2F: // 134
-                out.sitofp(INT, FLOAT);
+                out.sitofp(stack, FLOAT);
                 break;
             case Opcodes.I2D: // 135
-                out.sitofp(INT, DOUBLE);
+                out.sitofp(stack, DOUBLE);
                 break;
             case Opcodes.L2I: // 136
-                out.operationto("trunc", LONG, INT);
+                out.operationto(stack, "trunc", INT);
                 break;
             case Opcodes.L2F: // 137
-                out.sitofp(LONG, FLOAT);
+                out.sitofp(stack, FLOAT);
                 break;
             case Opcodes.L2D: // 138
-                out.sitofp(LONG, DOUBLE);
+                out.sitofp(stack, DOUBLE);
                 break;
             case Opcodes.F2I: // 139
-                out.fptosi(FLOAT, INT);
+                out.fptosi(stack, INT);
                 break;
             case Opcodes.F2L: // 140
-                out.fptosi(FLOAT, LONG);
+                out.fptosi(stack, LONG);
                 break;
             case Opcodes.F2D: // 141
-                out.operationto("fpext", FLOAT, DOUBLE);
+                out.operationto(stack, "fpext", DOUBLE);
                 break;
             case Opcodes.D2I: // 142
-                out.fptosi(DOUBLE, INT);
+                out.fptosi(stack, INT);
                 break;
             case Opcodes.D2L: // 143
-                out.fptosi(DOUBLE, LONG);
+                out.fptosi(stack, LONG);
                 break;
             case Opcodes.D2F: // 144
-                out.operationto("fptrunc", DOUBLE, FLOAT);
+                out.operationto(stack, "fptrunc", FLOAT);
                 break;
             case Opcodes.I2B: // 145
-                out.operationto("trunc", INT, BYTE); //todo ?
+                out.operationto(stack, "strunc", BYTE); //todo ?
                 break;
             case Opcodes.I2C: // 146
-                out.operationto("trunc", INT, CHAR); //todo ? strunc ?
+                out.operationto(stack, "utrunc", CHAR); //todo ? strunc ?
                 break;
             case Opcodes.I2S: // 147
-                out.operationto("trunc", INT, SHORT); //todo ? strunc ?
+                out.operationto(stack, "utrunc", SHORT); //todo ? strunc ?
                 break;
             // =============================================== Long compares (use with IF* command) ==
             case Opcodes.LCMP: // 148
@@ -587,49 +556,21 @@ public class MV extends MethodVisitor {
             case Opcodes.FRETURN: // 174
             case Opcodes.DRETURN: // 175
             case Opcodes.ARETURN: {// 176
-                String type = null;
-                switch (opcode) {
-                    case Opcodes.IRETURN: // 172
-                        type = INT;
-                        break;
-                    case Opcodes.LRETURN: // 173
-                        type = LONG;
-                        break;
-                    case Opcodes.FRETURN: // 174
-                        type = FLOAT;
-                        break;
-                    case Opcodes.DRETURN: // 175
-                        type = DOUBLE;
-                        break;
-                    case Opcodes.ARETURN: // 176
-                        type = POINTER;
-                        break;
-                }
-
-                String v = out.allocReg();
-                out.genPopCode(type, v);
-                String castv = v;
-                if (!type.equals(_resType)) {
-                    castv = out.allocReg();
-                    out.genCastCode(castv, type, v, _resType);
-                }
-
-                out.genRestoreStackCode();
-                out.add("ret " + _resType + " " + castv);
+                StackValue sv = stack.pop();
+                sv = out.castP1ToP2(stack, sv, _resType);
+                out.add("ret " + sv.fullName());
                 break;
             }
             case Opcodes.RETURN: // 177
-                out.genRestoreStackCode();
                 out.add("ret void");
                 break;
             // =============================================== misc ==
             case Opcodes.ARRAYLENGTH: // 190
 
-                String arrtype = Util.javaSignature2irType(cv.getStatistics().getResolver(), "[I");
-                out.arrayLength(arrtype);
+                out.arrayLength(stack);
                 break;
             case Opcodes.ATHROW: // 191
-                out.add("athrow"); //
+                out.add("athrow"); // todo
                 break;
             case Opcodes.MONITORENTER: // 194
                 out.add("monitorenter");
@@ -647,14 +588,14 @@ public class MV extends MethodVisitor {
         switch (opcode) {
             case Opcodes.BIPUSH: // 16
                 out.add("; bipush " + value);
-                out.genPushCode(INT, "" + value);
+                out.addImm(value, INT, stack);
                 break;
             case Opcodes.SIPUSH: // 17
                 out.add("; sipush " + value);
-                out.genPushCode(INT, "" + value);
+                out.addImm(value, INT, stack);
                 break;
             case Opcodes.NEWARRAY: // 188
-                out.newArray(this.cv.getStatistics().getResolver(), Internals.javacode2javatag(value));
+                out.newArray(stack, this.cv.getStatistics().getResolver(), Internals.javacode2javatag(value));
                 break;
             default:
                 //System.out.println("visitIntInsn " + opcode + " " + value);
@@ -672,10 +613,12 @@ public class MV extends MethodVisitor {
             case Opcodes.ALOAD: // 25
             {
                 LocalVar lv = this.vars.get(slot, curLabel);
-                String type = Util.javaSignature2irType(this.cv.getStatistics().getResolver(), lv.signature);
-                out.comment(type + "load " + slot);
 
-                out.genLoadLocalVarCode(type, slot);
+                String type = Util.javaSignature2irType(this.cv.getStatistics().getResolver(), lv.signature);
+                String s = stack.push(type);
+                out.comment(type + "load " + slot);
+                //out.add(s + " = load " + type + ", " + type + "* %" + lv.name);
+                out.load(s, type, "%" + lv.name, stack);
             }
             break;
             // =============================================== Store (Store stack into local variable) ==
@@ -687,9 +630,11 @@ public class MV extends MethodVisitor {
             {
                 LocalVar lv = this.vars.get(slot, curLabel);
                 String type = Util.javaSignature2irType(this.cv.getStatistics().getResolver(), lv.signature);
+                StackValue value = stack.pop();
+                value = out.castP1ToP2(stack, value, type);
                 out.comment(type + "store " + slot);
-
-                out.genStoreLocalVarCode(type, slot);
+                //out.add("store " + value.fullName() + ", " + type + "* %" + lv.name);
+                out.store(type, value, "%" + lv.name, stack);
             }
             break;
             default:
@@ -701,31 +646,28 @@ public class MV extends MethodVisitor {
     public void visitTypeInsn(int opcode, String s) {
         switch (opcode) {
             case Opcodes.NEW: // 187
-                out.comment("; new " + s);
-                out._new(this.cv.getStatistics().getResolver(), s);
+                out._new(stack, this.cv.getStatistics().getResolver(), s);
                 break;
             case Opcodes.ANEWARRAY: // 189
                 if (!s.startsWith("[")) {
                     s = "L" + s + ";";
                 }
-                out.comment("; anewarray " + s);
-                out.newArray(this.cv.getStatistics().getResolver(), s);
+                out.newArray(stack, this.cv.getStatistics().getResolver(), s);
                 break;
             case Opcodes.CHECKCAST: {// 192
                 //out.add("checkcast " + s);
-                String sv = out.allocReg();
+                StackValue sv = stack.pop();
                 String irtype = Util.javaSignature2irType(cv.getStatistics().getResolver(), "L" + s + ";");
-                out.genPopCode(POINTER, sv);
-                out.genPushCode(POINTER, sv);
+                String uv = stack.push(irtype);
+                out.add(uv + " = bitcast " + sv.fullName() + " to " + irtype);
                 //todo gust
                 break;
             }
             case Opcodes.INSTANCEOF: {// 193
                 //out.add("instanceof " + s);
-                String sv = out.allocReg();
+                StackValue sv = stack.pop();
                 String irtype = Util.javaSignature2irType(cv.getStatistics().getResolver(), "L" + s + ";");
-                out.genPopCode(irtype, sv);
-                out.genPushCode(INT, "1");
+                out.addImm((Integer) 1, INT, stack);
                 //todo gust
                 break;
             }
@@ -738,19 +680,19 @@ public class MV extends MethodVisitor {
     public void visitFieldInsn(int opcode, String className, String name, String signature) {
         switch (opcode) {
             case Opcodes.GETSTATIC: // 178
-                out.getstatic(this.cv.getStatistics().getResolver(), className, name, signature);
+                out.getstatic(stack, this.cv.getStatistics().getResolver(), className, name, signature);
                 if (!className.equals(this.cv.className)) {
                     this.cv.getStaticFields().add(new JField(className, name, signature));
                 }
                 break;
             case Opcodes.PUTSTATIC: // 179
-                out.putstatic(this.cv.getStatistics().getResolver(), className, name, signature);
+                out.putstatic(stack, this.cv.getStatistics().getResolver(), className, name, signature);
                 break;
             case Opcodes.GETFIELD: // 180
-                out.getfield(this.cv.getStatistics().getResolver(), className, name, signature);
+                out.getfield(stack, this.cv.getStatistics().getResolver(), className, name, signature);
                 break;
             case Opcodes.PUTFIELD: // 181
-                out.putfield(this.cv.getStatistics().getResolver(), className, name, signature);
+                out.putfield(stack, this.cv.getStatistics().getResolver(), className, name, signature);
                 break;
             default:
                 //System.out.println("visitFieldInsn " + opcode + " " + className);
@@ -765,29 +707,25 @@ public class MV extends MethodVisitor {
 
     @Override
     public void visitMethodInsn(int opcode, String className, String methodName, String signature, boolean b) {
-        out.comment("invoke " + className + "." + methodName);
         switch (opcode) {
             case Opcodes.INVOKEINTERFACE:
             case Opcodes.INVOKEVIRTUAL: // 182
             {
-
                 JSignature s = new JSignature(this.cv.getStatistics().getResolver(), signature);
                 String classIr = Util.class2irType(this.cv.getStatistics().getResolver(), className);
                 s.getArgs().add(0, classIr);
 
-                String call = out.getSignatureCall(className, methodName, s, null);
+                String call = out.getSignatureCall(className, methodName, this.stack, null, s);
                 if ("void".equals(s.getResult())) {
-                    out.add("call  " + call);
+                    out.add("call  " + call); //todo
                 } else {
-                    String ret = out.allocReg();
-                    out.add(ret + " = call " + call);
-                    out.genPushCode(s.getResult(), ret);
+                    String op = stack.push(s.getResult());
+                    out.add(op + " = call " + call);//todo
                 }
                 // declare
                 boolean inClass = this.cv.className.equals(className);
                 if (!inClass) {
-                    String tmps = s.getSignatureDeclare(className, methodName, null);
-//                    call = call.replaceAll("\\%stack[0-9]{1,3}", "");
+                    String tmps = out.getSignatureDeclare(className, methodName, null, s);
                     this.cv.declares.add(tmps);
                 }
             }
@@ -797,43 +735,35 @@ public class MV extends MethodVisitor {
                 JSignature s = new JSignature(this.cv.getStatistics().getResolver(), signature);
                 String classIr = Util.class2irType(this.cv.getStatistics().getResolver(), className);
                 s.getArgs().add(0, classIr);
-
-                String call = out.getSignatureCall(className, methodName, s, null);
+                String call = out.getSignatureCall(className, methodName, this.stack, null, s);
                 if ("void".equals(s.getResult())) {
                     out.add("call " + call + " ; special call private or <init>");
                 } else {
-                    String ret = out.allocReg();
-                    out.add(ret + " = call " + call + " ; special call private");
-                    out.genPushCode(s.getResult(), ret);
+                    String op = stack.push(s.getResult());
+                    out.add(op + " = call " + call + " ; special call private");
                 }
                 // declare
                 boolean inClass = this.cv.className.equals(className);
                 if (!inClass) {
-                    String tmps = s.getSignatureDeclare(className, methodName, null);
+                    String tmps = out.getSignatureDeclare(className, methodName, null, s);
                     this.cv.declares.add(tmps);
                 }
             }
             break;
             case Opcodes.INVOKESTATIC: // 184
             {
-                if (methodName.equals("abs")) {
-                    int debug = 1;
-                }
                 JSignature s = new JSignature(this.cv.getStatistics().getResolver(), signature);
-                String classIr = Util.class2irType(this.cv.getStatistics().getResolver(), className);
-                String call = out.getSignatureCall(className, methodName, s, null);
+                String call = out.getSignatureCall(className, methodName, this.stack, null, s);
                 if ("void".equals(s.getResult())) {
                     out.add("call " + call);
                 } else {
-                    String ret = out.allocReg();
-                    out.add(ret + " = call " + call + " ; static");
-                    out.genPushCode(s.getResult(), ret);
-
+                    String op = stack.push(s.getResult());
+                    out.add(op + " = call " + call);
                 }
                 // declare
                 boolean inClass = this.cv.className.equals(className);
                 if (!inClass) {
-                    String tmps = s.getSignatureDeclare(className, methodName, null);
+                    String tmps = out.getSignatureDeclare(className, methodName, null, s);
                     this.cv.declares.add(tmps);
                 }
             }
@@ -842,18 +772,17 @@ public class MV extends MethodVisitor {
             {
                 JSignature s = new JSignature(this.cv.getStatistics().getResolver(), signature);
                 String classTypeName = Util.class2irType(this.cv.getStatistics().getResolver(), className);
-                String call = out.getSignatureCall(className, methodName, s, null);
+                String call = out.getSignatureCall(className, methodName, this.stack, null, s);
                 if ("void".equals(s.getResult())) {
-                    out.add("call " + call);
+                    out.add("call dyn " + call);
                 } else {
-                    String ret = out.allocReg();
-                    out.add(ret + " = call " + call + " ; dyna");
-                    out.genPushCode(s.getResult(), ret);
+                    String op = stack.push(s.getResult());
+                    out.add(op + " = call syn " + call);
                 }
                 // declare
                 boolean inClass = this.cv.className.equals(className);
                 if (!inClass) {
-                    String tmps = s.getSignatureDeclare(className, methodName, classTypeName);
+                    String tmps = out.getSignatureDeclare(className, methodName, classTypeName, s);
                     this.cv.declares.add(tmps);
                 }
             }
@@ -879,7 +808,7 @@ public class MV extends MethodVisitor {
             case Opcodes.IFLE: // 158
             {
                 usedLabels.add(label.toString());
-                out.branch(commands, label, opcode - Opcodes.IFEQ, 1);//pop 1 oprand
+                out.branch(stack, commands, label, opcode - Opcodes.IFEQ, 1);//pop 1 oprand
                 break;
             }
             case Opcodes.IF_ICMPEQ: // 159
@@ -890,7 +819,7 @@ public class MV extends MethodVisitor {
             case Opcodes.IF_ICMPLE: // 164
             {
                 usedLabels.add(label.toString());
-                out.branch(commands, label, opcode - Opcodes.IF_ICMPEQ, 2);//pop 2 oprand
+                out.branch(stack, commands, label, opcode - Opcodes.IF_ICMPEQ, 2);//pop 2 oprand
                 break;
             }
             case Opcodes.IF_ACMPEQ: // 165
@@ -898,12 +827,15 @@ public class MV extends MethodVisitor {
             {
                 usedLabels.add(label.toString());
 
-
-                String sv1 = out.allocReg();
-                String sv2 = out.allocReg();
-                out.genPopCode(POINTER, sv1);
-                out.genPopCode(POINTER, sv2);
-                out.add("%__tmpc" + out.tmp + " = icmp " + IR.ICMP[opcode == Opcodes.IF_ACMPEQ ? IR.EQ : IR.NE] + " " + POINTER + " " + sv1 + ", " + sv2);
+                StackValue sv1 = stack.pop();
+                StackValue sv2 = stack.pop();
+                String uv1 = stack.push("i8*");
+                String uv2 = stack.push("i8*");
+                stack.pop();
+                stack.pop();
+                out.add(uv1 + " = bitcast " + sv1.fullName() + " to i8*");
+                out.add(uv2 + " = bitcast " + sv2.fullName() + " to i8*");
+                out.add("%__tmpc" + out.tmp + " = icmp " + IR.ICMP[opcode == Opcodes.IF_ACMPEQ ? IR.EQ : IR.NE] + " i8* " + uv1 + ", " + uv2);
                 out.add("br i1 %__tmpc" + out.tmp + ", label %" + label + ", label %__tmpl" + out.tmp);
                 out.add("__tmpl" + out.tmp + ":");
                 out.tmp++;
@@ -921,9 +853,8 @@ public class MV extends MethodVisitor {
                 break;
             case Opcodes.IFNULL: // 198
             case Opcodes.IFNONNULL: // 199
-                String sv = out.allocReg();
-                out.genPopCode(POINTER, sv);
-                out.add("%__tmpc" + out.tmp + " = icmp " + IR.ICMP[opcode == Opcodes.IFNULL ? IR.EQ : IR.NE] + " " + POINTER + " " + sv + ", null");
+                StackValue sv = stack.pop();
+                out.add("%__tmpc" + out.tmp + " = icmp " + IR.ICMP[opcode == Opcodes.IFNULL ? IR.EQ : IR.NE] + " " + sv.fullName() + ", null");
                 out.add("br i1 %__tmpc" + out.tmp + ", label %" + label + ", label %__tmpl" + out.tmp);
                 out.add("__tmpl" + out.tmp + ":");
                 out.tmp++;
@@ -953,26 +884,22 @@ public class MV extends MethodVisitor {
 
     @Override
     public void visitLdcInsn(Object o) {
-
+        out.add("; ldc " + o);
         if (o instanceof String) {
-            out.add("; ldc " + o);
-            out.newString(cv, (String) o);
+            // const
+            out.newString(cv, stack, (String) o);
         } else if (o instanceof Integer) {
             Integer value = (Integer) o;
-            out.add("; ldc " + value);
-            out.genPushCode(INT, o.toString());
+            out.addImm(value, INT, stack);
         } else if (o instanceof Long) {
             Long value = (Long) o;
-            out.add("; ldc " + value);
-            out.genPushCode(LONG, o.toString());
+            out.addImm(value, LONG, stack);
         } else if (o instanceof Float) {
             Float value = (Float) o;
-            out.add("; ldc " + value);
-            out.genPushCode(FLOAT, out.floatToString((float) o));
+            out.addImm(value, FLOAT, stack);
         } else if (o instanceof Double) {
             Double value = (Double) o;
-            out.add("; ldc " + value);
-            out.genPushCode(DOUBLE, out.floatToString((double) o));
+            out.addImm(value, DOUBLE, stack);
         } else {
             out.add("; todo add const " + o);
         }
@@ -982,21 +909,19 @@ public class MV extends MethodVisitor {
     public void visitIincInsn(int slot, int value) {
 
         LocalVar var = this.vars.get(slot, curLabel);
-        String type = Util.javaSignature2irType(cv.getStatistics().getResolver(), var.signature);
-        String iv = out.allocReg();
-        out.genGetLocalVarCode(type, slot, iv);
-        String rv = out.allocReg();
-        out.add(rv + " = add i32 " + iv + ", " + value);
-        out.genSetLocalVarCode(type, slot, rv);
+        out.add("%__tmpv" + out.tmp + " = load i32, i32* %" + var.name);
+        out.tmp++;
+        out.add("%__tmpv" + out.tmp + " = add i32 %__tmpv" + (out.tmp - 1) + ", " + value);
+        out.tmp++;
+        out.add("store i32 %__tmpv" + (out.tmp - 1) + ", i32* %" + var.name + "; inc ");
     }
 
 
     @Override
     public void visitTableSwitchInsn(int from, int to, Label label, Label... labels) {
         usedLabels.add(label.toString());
-        String sv = out.allocReg();
-        out.genPopCode(INT, sv);
-        out.add("switch " + INT + " " + sv + ", label %" + label + " [");
+        StackValue sv = stack.pop();
+        out.add("switch " + sv.fullName() + ", label %" + label + " [");
         for (Label l : labels) {
             usedLabels.add(l.toString());
             out.add("    i32 " + from + ", label %" + l);
@@ -1008,9 +933,8 @@ public class MV extends MethodVisitor {
     @Override
     public void visitLookupSwitchInsn(Label label, int[] values, Label[] labels) {
         usedLabels.add(label.toString());
-        String sv = out.allocReg();
-        out.genPopCode(INT, sv);
-        out.add("switch " + INT + " " + sv + ", label %" + label + " [");
+        StackValue sv = stack.pop();
+        out.add("switch " + sv.fullName() + ", label %" + label + " [");
         for (int i = 0; i < values.length; i++) {
             usedLabels.add(labels[i].toString());
             out.add("    i32 " + values[i] + ", label %" + labels[i]);
@@ -1021,11 +945,9 @@ public class MV extends MethodVisitor {
     @Override
     public void visitMultiANewArrayInsn(String s, int dims) {
         out.comment("; Multi Dimension Array: " + s + " " + dims);
-        List<String> dimms = new ArrayList<>();
+        List<StackValue> dimms = new ArrayList<>();
         for (int i = 0; i < dims; i++) {
-            String sv = out.allocReg();
-            out.genPopCode(INT, sv);
-            dimms.add(sv);
+            dimms.add(stack.pop());
         }
     }
 
@@ -1120,12 +1042,12 @@ public class MV extends MethodVisitor {
         result = ms.split("\n");
         discardDoubleLabel(result);
 
-//        IrFunction irf = new IrFunction(cv.className, methodName, javaSignature);
-//        irf.define = define;
-//        irf.end = "}";
-//        irf.parse(result);
-//        String str = irf.toString();
-//        result = str.split("\n");
+        IrFunction irf = new IrFunction(cv.className, methodName, javaSignature);
+        irf.define = define;
+        irf.end = "}";
+        irf.parse(result);
+        String str = irf.toString();
+        result = str.split("\n");
 
         for (int i = 0; i < result.length; i++) {
             ps.print("    ");

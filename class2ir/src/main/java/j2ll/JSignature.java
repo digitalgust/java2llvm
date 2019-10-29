@@ -41,17 +41,6 @@ public class JSignature {
         return this.result;
     }
 
-
-
-    public String getSignatureDeclare(String className, String methodName, String prefix) {
-        StringJoiner joiner = new StringJoiner(", ", this.result + " @" + getID(className, methodName) + "(", ")");
-        if (prefix != null) joiner.add(prefix);
-        for (String arg : this.args) {
-            joiner.add(arg);
-        }
-        return joiner.toString();
-    }
-
     public String getID(String className, String methodName) {
         return Util.classMethodSignature2id(className, methodName, this);
     }

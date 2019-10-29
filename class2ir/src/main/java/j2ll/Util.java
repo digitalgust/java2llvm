@@ -14,13 +14,6 @@ import static j2ll.Internals.*;
 public final class Util {
     static public ClassHelper helper;
 
-    public static boolean isPtr(String irType) {
-        if (irType.endsWith("*")) {
-            return true;
-        }
-        return false;
-    }
-
     public static String javaSignature2irType(Resolver resolver, String str) {
 
         if (str.equals("B")) {
@@ -43,7 +36,7 @@ public final class Util {
             return BOOLEAN;
         } else if (str.startsWith("L")) {
             str = str.substring(1, str.length() - 1);
-            return resolver.getIrType(str);
+            return resolver.resolve(str);
         } else if (str.startsWith("[")) {
             return javaArr2irType(resolver, str);
         }
@@ -58,11 +51,11 @@ public final class Util {
         try {
             if (type.endsWith("*")) {
                 return type.substring(0, type.length() - 1);
-            } else if (type.startsWith("%..")) {
-                String s = "%" + type.substring(2) + "*";
+            }else if(type.startsWith("%..")){
+                String s = "%"+type.substring(2)+"*";
                 return s;
             } else {
-                throw new RuntimeException("detype error:" + type);
+                throw new RuntimeException("detype error:"+type);
             }
         } catch (Exception e) {
             e.printStackTrace();
@@ -71,7 +64,7 @@ public final class Util {
     }
 
     public static String javaArr2irType(Resolver resolver, String signature) {
-        resolver.getIrType(signature);
+        resolver.resolve(signature);
         String next = "" + signature.substring(1);
         if (next.startsWith("[")) javaArr2irType(resolver, next);//recur resolve
 
@@ -81,7 +74,7 @@ public final class Util {
     }
 
     public static String javaArr2struct(Resolver resolver, String signature) {
-        resolver.getIrType(signature);
+        resolver.resolve(signature);
         String next = "" + signature.substring(1);
         char nc = signature.charAt(1);
         switch (nc) {
@@ -107,6 +100,7 @@ public final class Util {
         }
         throw new RuntimeException(signature);
     }
+
 
     public static List<String> javaSignatures2irTypes(Resolver resolver, String str) {
         //System.out.print("Parse ");
@@ -190,9 +184,9 @@ public final class Util {
                 return s;
             } else {
                 ClassFile c = helper.getClassFile(className);
-                if (c == null) {
-                    int debug = 1;
-                }
+//                if (c == null) {
+//                    int debug = 1;
+//                }
                 StringJoiner joiner = new StringJoiner(", ", "{", "}");
                 for (Field f : c.getFields()) {
                     joiner.add(javaSignature2irType(resolver, f.getDescription()));

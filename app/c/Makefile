@@ -7,7 +7,7 @@ ASMS2=$(CS:%.c=%.s)
 all: $(TARGET)
 
 $(TARGET): $(ASMS) $(ASMS2)
-	clang -v -lm -o3 -o $(TARGET) $(ASMS) $(ASMS2)
+	clang -v -lm -o $(TARGET) $(ASMS) $(ASMS2)
 #	strip $(TARGET)
 
 %.ll: %.c

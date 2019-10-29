@@ -26,6 +26,34 @@ public class IRBuilder {
         strings.add("; " + str);
     }
 
+
+    public String getSignatureCall(String className, String methodName, RuntimeStack stack, String prefix, JSignature sig) {
+        StringJoiner joiner = new StringJoiner(", ", sig.getResult() + " @" + sig.getID(className, methodName) + "(", ")");
+        if (prefix != null) joiner.add(prefix);
+        List<StackValue> pops = new ArrayList<>();
+        for (int i = 0; i < sig.getArgs().size(); i++) {
+            pops.add(0, stack.pop());
+        }
+        for (int i = 0; i < sig.getArgs().size(); i++) {
+            String arg = sig.getArgs().get(i);
+
+            StackValue sv = pops.get(i);
+            sv = castP1ToP2(stack, sv, arg);//convert type
+            joiner.add(arg + " " + sv.toString());
+        }
+        return joiner.toString();
+    }
+
+    public String getSignatureDeclare(String className, String methodName, String prefix, JSignature sig) {
+        StringJoiner joiner = new StringJoiner(", ", sig.getResult() + " @" + sig.getID(className, methodName) + "(", ")");
+        if (prefix != null) joiner.add(prefix);
+        for (String arg : sig.getArgs()) {
+            joiner.add(arg);
+        }
+        return joiner.toString();
+    }
+
+
     public String floatToString(Object value) {
         if (value instanceof Float) {
             Float f = (Float) value;
@@ -38,12 +66,101 @@ public class IRBuilder {
         return value.toString(); // imm ??
     }
 
+    public void addImm(Object value, String type, RuntimeStack stack) {
+        String immname = "%_imm_" + tmp;
+        add(immname + " = alloca " + type);
+        StackValue sv1 = new StackValue(StackValue.MODE_IMM, value, type);
+        //add("store " + type + " " + floatToString(value) + ", " + type + "* " + immname);
+        store(type, sv1, immname, stack);
+        String sv = stack.push(type);
+        //add(sv + " = load " + type + ", " + type + "* " + immname);
+        load(sv, type, immname, stack);
+        tmp++;
+    }
 
     class SPair {
         StackValue p1;
         StackValue p2;
     }
 
+    //convert op1 to type ir2
+    public StackValue castP1ToP2(RuntimeStack stack, StackValue op1, String ir2) {
+        String ir1 = op1.getIR();
+
+        if (!ir2.equals(ir1)) {
+            if (ir1.equals(LONG)) {
+                if (ir2.equals(FLOAT) || ir2.equals(DOUBLE)) {
+                    throw new RuntimeException("  long  to float");
+                } else {
+                    String resvt = stack.push(ir2);
+                    add(resvt + " = trunc " + op1.fullName() + " to " + ir2);
+                }
+            } else if (ir1.equals(INT)) {
+                if (ir2.equals(FLOAT) || ir2.equals(DOUBLE)) {
+                    throw new RuntimeException("  int  to float");
+                } else if (ir2.equals(LONG)) {
+                    String resvt = stack.push(ir2);
+                    add(resvt + " = sext " + op1.fullName() + " to " + ir2);
+                } else {
+                    String resvt = stack.push(ir2);
+                    add(resvt + " = trunc " + op1.fullName() + " to " + ir2);
+                }
+            } else if (ir1.equals(BOOLEAN)) {
+                if (ir2.equals(FLOAT) || ir2.equals(DOUBLE)) {
+                    throw new RuntimeException("  boolean  to float");
+                } else {
+                    String resvt = stack.push(ir2);
+                    add(resvt + " = sext " + op1.fullName() + " to " + ir2);
+                }
+            } else if (ir1.equals(BYTE)) {
+                String resvt = stack.push(ir2);
+                if (ir2.equals(FLOAT) || ir2.equals(DOUBLE)) {
+                    throw new RuntimeException("  byte  to float");
+                } else if (ir1.equals(BOOLEAN)) {
+                    add(resvt + " = trunc " + op1.fullName() + " to " + ir2);
+                } else {
+                    add(resvt + " = sext " + op1.fullName() + " to " + ir2);
+                }
+            } else if (ir1.equals(CHAR)) {
+                String resvt = stack.push(ir2);
+                if (ir2.equals(FLOAT) || ir2.equals(DOUBLE)) {
+                    throw new RuntimeException("  char  to float");
+                } else if (ir1.equals(BOOLEAN) || ir1.equals(BYTE)) {
+                    add(resvt + " = trunc " + op1.fullName() + " to " + ir2);
+                } else {
+                    add(resvt + " = zext " + op1.fullName() + " to " + ir2);
+                }
+            } else if (ir1.equals(SHORT)) {
+                String resvt = stack.push(ir2);
+                if (ir2.equals(FLOAT) || ir2.equals(DOUBLE)) {
+                    throw new RuntimeException("  short  to float");
+                } else if (ir1.equals(BOOLEAN) || ir1.equals(BYTE)) {
+                    add(resvt + " = trunc " + op1.fullName() + " to " + ir2);
+                } else {
+                    add(resvt + " = sext " + op1.fullName() + " to " + ir2);
+                }
+            } else if (ir1.equals(FLOAT)) {
+                String resvt = stack.push(ir2);
+                if (ir2.equals(DOUBLE)) {
+                    add(resvt + " = fpext " + op1.fullName() + " to " + ir2);
+                } else {
+                    throw new RuntimeException(" float to " + ir2);
+                }
+            } else if (ir1.equals(DOUBLE)) {
+                String resvt = stack.push(ir2);
+                if (ir2.equals(FLOAT)) {
+                    add(resvt + " = fptrunc " + op1.fullName() + " to " + ir2);
+                } else {
+                    throw new RuntimeException(" double to " + ir2);
+                }
+            } else {
+                String resvt = stack.push(ir2);
+                add(resvt + " = bitcast " + op1.fullName() + " to " + ir2);
+            }
+            return stack.pop();
+        }
+        return op1;
+    }
 
     public void extValueType(RuntimeStack stack, SPair pair) {
         StackValue op2 = pair.p2;
@@ -77,31 +194,31 @@ public class IRBuilder {
         }
     }
 
-    public void in2out1(String op, String type) {
-        String v1 = allocReg();
-        genPopCode(type, v1);
-        String v2 = allocReg();
-        genPopCode(type, v2);
+    public void in2out1(RuntimeStack stack, String op, String type) {
+        StackValue op2 = stack.pop();
+        StackValue op1 = stack.pop();
+        SPair pair = new SPair();
+        pair.p1 = op1;
+        pair.p2 = op2;
+        extValueType(stack, pair);
+        op1 = pair.p1;
+        op2 = pair.p2;
 
-        String result = allocReg();
-        add(result + " = " + op + " " + type + " " + v2 + ", " + v1);
-        genPushCode(type, result);
 
+        String res = stack.push(op2.getIR());
+        StringBuilder tmp = new StringBuilder();
+        tmp.append(res);
+        tmp.append(" = ");
+        tmp.append(op);
+        tmp.append(' ');
+        tmp.append(op1.fullName());
+        tmp.append(", ");
+        tmp.append(op2);
+        add(tmp.toString());
     }
 
-    public void in2out1(String op, String type1, String type2) {
-        String v1 = allocReg();
-        genPopCode(type1, v1);
-        String v2 = allocReg();
-        genPopCode(type2, v2);
 
-        String result = allocReg();
-        add(result + " = " + op + " " + type2 + " " + v2 + ", " + v1);
-        genPushCode(type2, result);
-    }
-
-
-    public void newString(CV cv, String src) {
+    public void newString(CV cv, RuntimeStack stack, String src) {
         try {
             char[] carr = src.toCharArray();
             String dest = "";
@@ -125,74 +242,70 @@ public class IRBuilder {
             String funcName = AssistLLVM.getConstStringFuncName();
             cv.declares.add(funcName);
 
-            String v1s = allocReg();
+            String v1s = stack.push(carrIRtype);
             add(v1s + " = load " + carrIRtype + " , " + carrIRtype + "* @strptr" + src.hashCode());
-            String res = allocReg();
+            stack.pop();
+            String res = stack.push(ty);
             String reg = allocReg();
             add(reg + " = call " + ty + " @construct_string_with_char_arr_(" + carrIRtype + " " + v1s + ")");
-            add(res + " = bitcast " + ty + " " + reg + " to " + POINTER);
-            genPushCode(POINTER, res);
+            add(res + " = bitcast " + ty + " " + reg + " to " + ty);
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
 
-
-    public void arrayLength(String arrtype) {
-        String ptr = allocReg();
-        genPopCode(POINTER, ptr);
-        String arr = allocReg();
-        genCastCode(arr, POINTER, ptr, arrtype);
-
-        String result = allocReg();
+    public void arrayLength(RuntimeStack stack) {
+        StackValue sv = stack.pop();
+        String result = stack.push(Internals.INT);
         String reg = allocReg();
         // out
-        comment("arraylength " + arrtype);
-        getelementptr(reg, arrtype, arr, 0, 0);
-        load(result, INT, reg);
-        genPushCode(INT, result);
+        comment("arraylength " + sv.fullName());
+        getelementptr(reg, sv.getIR(), sv.toString(), 0, 0);
+        load(result, Internals.INT, reg, stack);
     }
 
 
-    public void _new(Resolver resolver, String name) {
+    public void _new(RuntimeStack stack, Resolver resolver, String name) {
         // state
-        String objStruct = resolver.getIrStruct(name);
-        String object = resolver.getIrType(name);
+        String struct = resolver.resolveStruct(name);
+        String object = resolver.resolve(name);
+        String res = stack.pushObjRef(object);
         String reg = allocReg();
         // out
-        comment(resolver.getIrStruct(name));
-        add("%__objptr" + tmp + " = getelementptr " + objStruct + ", " + objStruct + "* null, i32 1");
-        add("%__memsize" + tmp + " = ptrtoint " + objStruct + "* %__objptr" + tmp + " to i32 ");
+        comment(resolver.resolveStruct(name));
+        add("%__objptr" + tmp + " = getelementptr " + struct + ", " + struct + "* null, i32 1");
+        add("%__memsize" + tmp + " = ptrtoint " + struct + "* %__objptr" + tmp + " to i32 ");
         add(reg + " = call i8* @malloc(i32 %__memsize" + tmp + ")");
-        genPushCode(POINTER, reg);
         add(";call void @print_debug(i32 %__memsize" + tmp + ")");
+        add(res + " = bitcast i8* " + reg + " to " + object);
     }
 
-    public void neg(String type) {
-        String v = allocReg();
-        String res = allocReg();
-        genPopCode(type, v);
+    public void neg(RuntimeStack stack, String type) {
+        StackValue value = stack.pop();
+        String res = stack.push(type);
         if (Internals.INT.equals(type) || Internals.LONG.equals(type)) {
-            add(res + " = sub " + type + " 0, " + v);
+            add(res + " = sub " + value.getIR() + " 0, " + value);
         } else {
-            add(res + " = fsub " + type + " 0.0, " + v);
+            add(res + " = fsub " + value.getIR() + " 0.0, " + value);
         }
-        genPushCode(type, res);
     }
 
 
-    public void branch(Stack<String> commands, Label label, int op, int popCount) {
+    public void branch(RuntimeStack stack, Stack<String> commands, Label label, int op, int popCount) {
         if (commands.size() == 0) {
             if (popCount == 1) {
-                String op1 = allocReg();
-                genPopCode(INT, op1);
-                add("%__tmpc" + tmp + " = icmp " + IR.ICMP[op] + " " + INT + " " + op1 + ", 0");
+                StackValue op1 = stack.pop();
+                add("%__tmpc" + tmp + " = icmp " + IR.ICMP[op] + " " + op1.fullName() + ", 0");
             } else {
-                String op2 = allocReg();
-                genPopCode(INT, op2);
-                String op1 = allocReg();
-                genPopCode(INT, op1);
-                add("%__tmpc" + tmp + " = icmp " + IR.ICMP[op] + " " + INT + " " + op1 + ", " + op2);
+                StackValue op2 = stack.pop();
+                StackValue op1 = stack.pop();
+                SPair pair = new SPair();
+                pair.p1 = op1;
+                pair.p2 = op2;
+                extValueType(stack, pair);
+                op1 = pair.p1;
+                op2 = pair.p2;
+                add("%__tmpc" + tmp + " = icmp " + IR.ICMP[op] + " " + op1.fullName() + ", " + op2);
             }
             add("br i1 %__tmpc" + tmp + ", label %" + label + ", label %_if.else" + tmp);
             add("_if.else" + tmp + ":");
@@ -200,27 +313,28 @@ public class IRBuilder {
         } else {
             // POP prefix
             String cmd = commands.pop();
-            if (Prefix.FCMPL.equals(cmd) || Prefix.FCMPG.equals(cmd)) {
+            if (Prefix.FCMPL.equals(cmd) || Prefix.FCMPG.equals(cmd) || Prefix.DCMPL.equals(cmd) || Prefix.DCMPG.equals(cmd)) {
                 // double compare
-                String op2 = allocReg();
-                genPopCode(FLOAT, op2);
-                String op1 = allocReg();
-                genPopCode(FLOAT, op1);
-                add("%__tmpc" + tmp + " = fcmp " + IR.FCMP[op] + " " + FLOAT + " " + op1 + ", " + op2); // ordered compare
-            } else if (Prefix.DCMPL.equals(cmd) || Prefix.DCMPG.equals(cmd)) {
-                // double compare
-                String op2 = allocReg();
-                genPopCode(DOUBLE, op2);
-                String op1 = allocReg();
-                genPopCode(DOUBLE, op1);
-                add("%__tmpc" + tmp + " = fcmp " + IR.FCMP[op] + " " + DOUBLE + " " + op1 + ", " + op2); // ordered compare
+                StackValue op2 = stack.pop();
+                StackValue op1 = stack.pop();
+                SPair pair = new SPair();
+                pair.p1 = op1;
+                pair.p2 = op2;
+                extValueType(stack, pair);
+                op1 = pair.p1;
+                op2 = pair.p2;
+                add("%__tmpc" + tmp + " = fcmp " + IR.FCMP[op] + " " + op1.fullName() + ", " + op2); // ordered compare
             } else if (Prefix.LCMP.equals(cmd)) {
                 // long compare
-                String op2 = allocReg();
-                genPopCode(LONG, op2);
-                String op1 = allocReg();
-                genPopCode(LONG, op1);
-                add("%__tmpc" + tmp + " = icmp " + IR.ICMP[op] + " " + LONG + " " + op1 + ", " + op2);
+                StackValue op2 = stack.pop();
+                StackValue op1 = stack.pop();
+                SPair pair = new SPair();
+                pair.p1 = op1;
+                pair.p2 = op2;
+                extValueType(stack, pair);
+                op1 = pair.p1;
+                op2 = pair.p2;
+                add("%__tmpc" + tmp + " = icmp " + IR.ICMP[op] + " " + op1.fullName() + ", " + op2);
             } else {
                 System.err.println("Unknown prefix: " + cmd);
             }
@@ -231,10 +345,9 @@ public class IRBuilder {
     }
 
     // todo split primitive and objects
-    public void newArray(Resolver resolver, String javaArrayType) {
-        String length = allocReg();
-        genPopCode(INT, length);
-        comment("new array " + javaArrayType + " size: " + length);
+    public void newArray(RuntimeStack stack, Resolver resolver, String javaArrayType) {
+        StackValue op = stack.pop();
+        comment("new array " + javaArrayType + " size: " + op);
         String ty = Util.javaSignature2irType(resolver, javaArrayType);
         String reg1 = allocReg();
         String reg2 = allocReg();//for arrlength
@@ -244,338 +357,142 @@ public class IRBuilder {
         if (bytes == 0) { //object
             String reg4 = allocReg();
             add(reg4 + " = call i32 @ptr_size()");
-            add(reg1 + " = mul i32" + length + ", " + reg4);
+            add(reg1 + " = mul " + op.fullName() + ", " + reg4);
         } else {
-            add(reg1 + " = mul i32" + length + ", " + bytes);
+            add(reg1 + " = mul " + op.fullName() + ", " + bytes);
         }
         add(reg2 + " = add i32 " + reg1 + ", 4");
         add(reg3 + " = call i8* @malloc(i32 " + reg2 + ")");
-        genPushCode(POINTER, reg3);
         String parent = Util.javaSignature2irType(resolver, "[" + javaArrayType);
-        String arr = allocReg();
-        genCastCode(arr, POINTER, reg3, parent);
+        String res = stack.push(parent);
+        add(res + " = bitcast i8* " + reg3 + " to " + parent);
 
         //save array length to struct first  {i32,[0 x type]}
         String reg5 = allocReg();
-        getelementptr(reg5, parent, arr, 0, 0);
-        store(INT, length, reg5);
+        StackValue ptr = stack.peek(-1);
+        getelementptr(reg5, ptr.getIR(), ptr.toString(), 0, 0);
+        store(INT, op, reg5, stack);
     }
 
-    public void putfield(Resolver resolver, String className, String name, String signature) {
+    public void putfield(RuntimeStack stack, Resolver resolver, String className, String name, String signature) {
         // state
+        StackValue value = stack.pop();
+        StackValue inst = stack.pop();
         String ty = Util.javaSignature2irType(resolver, signature);
-        String value = allocReg();
-        genPopCode(ty, value);
-        String classIr = Util.javaSignature2irType(resolver, "L" + className + ";");
-        String inst = allocReg();
-        genPopCode(classIr, inst);
         String sp = allocReg();
         // out
-        comment("putfield " + className + " " + name + " " + signature + " ( " + classIr + " := " + ty + " )");
-        getelementptr(sp, classIr, inst, 0, Util.fieldIndexInClass(className, name));
-        store(ty, value, sp);
+        comment("putfield " + className + " " + name + " " + signature + " ( " + inst.fullName() + " := " + value.fullName() + " )");
+        getelementptr(sp, inst.getIR(), inst.toString(), 0, Util.fieldIndexInClass(className, name));
+        store(ty, value, sp, stack);
     }
 
-    public void putstatic(Resolver resolver, String className, String name, String signature) {
+    public void putstatic(RuntimeStack stack, Resolver resolver, String className, String name, String signature) {
         // state
+        StackValue value = stack.pop();
         String ty = Util.javaSignature2irType(resolver, signature);
-        String value = allocReg();
-        genPopCode(ty, value);
         String sp = allocReg();
         // out
-        comment("putstatic " + className + " " + name + " " + signature + " ( " + signature + " := " + ty + " )");
+        comment("putstatic " + className + " " + name + " " + signature + " ( " + signature + " := " + value.fullName() + " )");
         getelementptr(sp, ty + "*", Util.static2str(className, name));
-        store(ty, value, sp);
+        store(ty, value, sp, stack);
     }
 
 
-    public void getfield(Resolver resolver, String className, String name, String signature) {
+    public void getfield(RuntimeStack stack, Resolver resolver, String className, String name, String signature) {
         // state
-        String classIr = Util.javaSignature2irType(resolver, "L" + className + ";");
-        String inst = allocReg();
-        genPopCode(classIr, inst);
+        StackValue inst = stack.pop();
         String ty = Util.javaSignature2irType(resolver, signature);
+        String result = stack.push(ty);
         String sp = allocReg();
-
-        if (signature.equals("[C")) {
-            int debug = 1;
-        }
         // out
-        comment("getfield " + className + " " + name + " " + signature + " ( " + ty + " )");
-        getelementptr(sp, classIr, inst, 0, Util.fieldIndexInClass(className, name));
-        String result = allocReg();
-        load(result, ty, sp);
-        genPushCode(ty, result);
+        comment("getfield " + className + " " + name + " " + signature + " ( " + inst.fullName() + " )");
+        getelementptr(sp, inst.getIR(), inst.toString(), 0, Util.fieldIndexInClass(className, name));
+        load(result, ty, sp, stack);
     }
 
-    public void getstatic(Resolver resolver, String className, String name, String signature) {
+    public void getstatic(RuntimeStack stack, Resolver resolver, String className, String name, String signature) {
         // state
         String ty = Util.javaSignature2irType(resolver, signature);
-        String result = allocReg();
+        String result = stack.push(ty);
         String sp = allocReg();
         // out
         comment("getstatic " + className + " " + name + " " + signature + " ( " + result + " := " + signature + " )");
         getelementptr(sp, ty + "*", Util.static2str(className, name));
-        load(result, ty, sp);
-        genPushCode(ty, result);
+        load(result, ty, sp, stack);
+
     }
 
-    public String getSignatureCall(String className, String methodName, JSignature sig, String prefix) {
-        StringJoiner joiner = new StringJoiner(", ", sig.getResult() + " @" + sig.getID(className, methodName) + "(", ")");
-        if (prefix != null) joiner.add(prefix);
-        List<String> pops = new ArrayList<String>();
-        for (int i = sig.getArgs().size() - 1; i >= 0; i--) {
-            String reg = allocReg();
-            String type = sig.getArgs().get(i);
-            genPopCode(type, reg);
-            pops.add(0, reg);
-        }
-        for (int i = 0; i < sig.getArgs().size(); i++) {
-            String arg = sig.getArgs().get(i);
-            joiner.add(arg + " " + pops.get(i));
-        }
-        return joiner.toString();
-    }
-
-    public void arrstore(Resolver resolver, String javatype) {
-        String resultType = Util.javaSignature2irType(resolver, javatype);
-        String parent = Util.javaSignature2irType(resolver, "[" + javatype);
-        comment(resultType + "astore ");
+    public void arrstore(RuntimeStack stack, String type) {
         // state
-        String value = allocReg();
-        genPopCode(resultType, value);
-        String index = allocReg();
-        genPopCode(INT, index);
-        String arrayRef = allocReg();
-        genPopCode(POINTER, arrayRef);
-        String arrayRefCast = allocReg();
-        genCastCode(arrayRefCast, POINTER, arrayRef, parent);
-        String elemPtr = allocReg();
+        StackValue value = stack.pop();
+        StackValue index = stack.pop();
+        StackValue arrayRef = stack.pop();
+        String sp = allocReg();
         // out
-        comment(parent + "aload ");
-        getelementptr(elemPtr, parent, arrayRefCast, 0, 1, "i32 " + index); // pointer to element of array
-        store(resultType, value, elemPtr);
+        comment(type + "astore ");
+        String resultType = Util.detype(arrayRef.getIR());
+        getelementptr(sp, resultType, arrayRef, 0, 1, index.fullName()); // pointer to element of array
+        store(type, value, sp, stack);
     }
 
-    public void arrload(Resolver resolver, String javatype) {
-        String resultType = Util.javaSignature2irType(resolver, javatype);
-        String parentType = Util.javaSignature2irType(resolver, "[" + javatype);
-        comment(resultType + "aload ");
+    public void aastore(RuntimeStack stack) {
         // state
-        String index = allocReg();
-        genPopCode(INT, index);
-        String arrayRef = allocReg();
-        genPopCode(POINTER, arrayRef);
-        String arrayRefCast = allocReg();
-        genCastCode(arrayRefCast, POINTER, arrayRef, parentType);
-        String elemPtr = allocReg();
+        StackValue value = stack.pop();
+        StackValue index = stack.pop();
+        StackValue arrayRef = stack.pop();
+        String sp = allocReg();
         // out
-//        String resultType = Util.detype(javatype);
-        getelementptr(elemPtr, parentType, arrayRefCast, 0, 1, "i32 " + index); // pointer to element of array
-        String result = allocReg();
-        load(result, resultType, elemPtr);
-        if (Util.isPtr(resultType)) {
-            String resultCast = allocReg();
-            genCastCode(resultCast, resultType, result, POINTER);
-            genPushCode(POINTER, resultCast);
-        } else {
-            genPushCode(resultType, result);
-        }
+        comment("aastore " + value.getIR());
+        String resultType = Util.detype(arrayRef.getIR());
+        getelementptr(sp, resultType, arrayRef, 0, 1, index.fullName()); // pointer to element of array
+        store(value.getIR(), value, sp, stack);
     }
 
-
-    public void fptosi(String type1, String type2) {
-        operationto("fptosi", type1, type2);
-    }
-
-    public void sitofp(String type1, String type2) {
-        operationto("sitofp", type1, type2);
-    }
-
-
-    public void operationto(String op, String type1, String type2) {
-        String v1 = allocReg();
-        genPopCode(type1, v1);
-        String result = allocReg();
-        add(result + " = " + op + " " + type1 + " " + v1 + " to " + type2);
-        genPushCode(type2, result);
+    public void arrload(RuntimeStack stack, Resolver resolver, String javatype) {
+        String type = Util.javaSignature2irType(resolver, javatype);
+        // state
+        StackValue index = stack.pop();
+        StackValue arrayRef = stack.pop();
+        String value = stack.push(type);
+        String sp = allocReg();
+        // out
+        comment(type + "aload ");
+        String resultType = Util.detype(arrayRef.getIR());
+        getelementptr(sp, resultType, arrayRef, 0, 1, index.fullName()); // pointer to element of array
+        load(value, type, sp, stack);
 
     }
 
-    public void genCastCode(String to, String ir1, String from, String ir2) {
-
-        if (!ir2.equals(ir1)) {
-            if (ir1.equals(LONG)) {
-                if (ir2.equals(FLOAT) || ir2.equals(DOUBLE)) {
-                    throw new RuntimeException("  long  to float");
-                } else {
-                    add(to + " = trunc " + ir1 + " " + from + " to " + ir2);
-                }
-            } else if (ir1.equals(INT)) {
-                if (ir2.equals(FLOAT) || ir2.equals(DOUBLE)) {
-                    throw new RuntimeException("  int  to float");
-                } else if (ir2.equals(LONG)) {
-                    add(to + " = sext " + ir1 + " " + from + " to " + ir2);
-                } else {
-                    add(to + " = trunc " + ir1 + " " + from + " to " + ir2);
-                }
-            } else if (ir1.equals(BOOLEAN)) {
-                if (ir2.equals(FLOAT) || ir2.equals(DOUBLE)) {
-                    throw new RuntimeException("  boolean  to float");
-                } else {
-                    add(to + " = sext " + ir1 + " " + from + " to " + ir2);
-                }
-            } else if (ir1.equals(BYTE)) {
-                if (ir2.equals(FLOAT) || ir2.equals(DOUBLE)) {
-                    throw new RuntimeException("  byte  to float");
-                } else if (ir1.equals(BOOLEAN)) {
-                    add(to + " = trunc " + ir1 + " " + from + " to " + ir2);
-                } else {
-                    add(to + " = sext " + ir1 + " " + from + " to " + ir2);
-                }
-            } else if (ir1.equals(CHAR)) {
-                if (ir2.equals(FLOAT) || ir2.equals(DOUBLE)) {
-                    throw new RuntimeException("  char  to float");
-                } else if (ir1.equals(BOOLEAN) || ir1.equals(BYTE)) {
-                    add(to + " = trunc " + ir1 + " " + from + " to " + ir2);
-                } else {
-                    add(to + " = zext " + ir1 + " " + from + " to " + ir2);
-                }
-            } else if (ir1.equals(SHORT)) {
-                if (ir2.equals(FLOAT) || ir2.equals(DOUBLE)) {
-                    throw new RuntimeException("  short  to float");
-                } else if (ir1.equals(BOOLEAN) || ir1.equals(BYTE)) {
-                    add(to + " = trunc " + ir1 + " " + from + " to " + ir2);
-                } else {
-                    add(to + " = sext " + ir1 + " " + from + " to " + ir2);
-                }
-            } else if (ir1.equals(FLOAT)) {
-                if (ir2.equals(DOUBLE)) {
-                    add(to + " = fpext " + ir1 + " " + from + " to " + ir2);
-                } else {
-                    throw new RuntimeException(" float to " + ir2);
-                }
-            } else if (ir1.equals(DOUBLE)) {
-                if (ir2.equals(FLOAT)) {
-                    add(to + " = fptrunc " + ir1 + " " + from + " to " + ir2);
-                } else {
-                    throw new RuntimeException(" double to " + ir2);
-                }
-            } else {
-                add(to + " = bitcast " + ir1 + " " + from + " to " + ir2);
-            }
-        }
+    public void aaload(RuntimeStack stack) {
+        // state
+        StackValue index = stack.pop();
+        StackValue arrayRef = stack.pop();
+        String ty = arrayRef.getIR();
+        String sp = allocReg();
+        // out
+        comment("aaload " + ty);
+        String resultType = Util.detype(arrayRef.getIR());
+        getelementptr(sp, resultType, arrayRef, 0, 1, index.fullName()); // pointer to element of array
+        String loadType = Util.detype(resultType);
+        String value = stack.push(loadType);
+        load(value, loadType, sp, stack);
     }
 
-    public void genPushCode(String type, String value) {
-        String funcName = type;
-        if (Util.isPtr(type)) {
-            funcName = "ptr";
-            if (!type.equals(POINTER)) {
-                String cast = allocReg();
-                genCastCode(cast, type, value, POINTER);
-                value = cast;
-            }
-            type = POINTER;
-        } else if (type.equals(BOOLEAN)) {
-            funcName = INT;
-            String cast = allocReg();
-            genCastCode(cast, type, value, INT);
-            type = INT;
-            value = cast;
-        }
-        add("call void @push_" + funcName + "(%struct.StackFrame* %thrd_stack_reg,  " + type + " " + value + ")");
+    public void fptosi(RuntimeStack stack, String type) {
+        operationto(stack, "fptosi", type);
     }
 
-    public void genPopCode(String type, String result) {
-        if (Util.isPtr(type)) {
-            String resultcast = result;
-            if (!type.equals(POINTER)) {
-                resultcast = allocReg();
-            }
-            add(resultcast + " = call " + POINTER + " @pop_ptr(%struct.StackFrame* %thrd_stack_reg)");
-            if (!type.equals(POINTER)) {
-                genCastCode(result, POINTER, resultcast, type);
-            }
-        } else if (type.equals(BOOLEAN)) {
-            String resultcast = allocReg();
-            add(resultcast + " = call " + INT + " @pop_" + INT + "(%struct.StackFrame* %thrd_stack_reg)");
-            genCastCode(result, INT, resultcast, type);
-        } else {
-            add(result + " = call " + type + " @pop_" + type + "(%struct.StackFrame* %thrd_stack_reg)");
-        }
+    public void sitofp(RuntimeStack stack, String type) {
+        operationto(stack, "sitofp", type);
     }
 
-    public void genLoadLocalVarCode(String type, int slot) {
-        String funcName = type;
-        if (Util.isPtr(type)) {
-            funcName = "ptr";
-            type = POINTER;
-        } else if (type.equals(BOOLEAN)) {
-            funcName = INT;
-            type = INT;
-        }
-        String value = allocReg();
-        add(value + " = call " + type + " @localvar_get_" + funcName + "(%union.StackEntry* %local_var, i32 " + slot + ")");
-        genPushCode(type, value);
+
+    public void operationto(RuntimeStack stack, String op, String type) {
+        StackValue f = stack.pop();
+        String res = stack.push(type);
+        add(res + " = " + op + " " + f.fullName() + " to " + type);
     }
 
-    public void genStoreLocalVarCode(String type, int slot) {
-        String funcName = type;
-        if (Util.isPtr(type)) {
-            funcName = "ptr";
-            type = POINTER;
-        } else if (type.equals(BOOLEAN)) {
-            funcName = INT;
-            type = INT;
-        }
-        String result = allocReg();
-        genPopCode(type, result);
-        add("call void @localvar_set_" + funcName + "(%union.StackEntry* %local_var, i32 " + slot + ", " + type + " " + result + ")");
-    }
-
-    public void genGetLocalVarCode(String type, int slot, String result) {
-        if (Util.isPtr(type)) {
-            String resultcast = result;
-            if (!type.equals(POINTER)) {
-                resultcast = allocReg();
-            }
-            add(resultcast + " = call " + POINTER + " @localvar_get_ptr(%union.StackEntry* %local_var, i32 " + slot + ")");
-            if (!type.equals(POINTER)) {
-                genCastCode(result, POINTER, resultcast, type);
-            }
-        } else if (type.equals(BOOLEAN)) {
-            String resultcast = allocReg();
-            add(resultcast + " = call " + INT + " @localvar_get_" + INT + "(%union.StackEntry* %local_var, i32 " + slot + ")");
-            genCastCode(result, INT, resultcast, BOOLEAN);
-        } else {
-            add(result + " = call " + type + " @localvar_get_" + type + "(%union.StackEntry* %local_var, i32 " + slot + ")");
-        }
-    }
-
-    public void genSetLocalVarCode(String type, int slot, String value) {
-        String funcName = type;
-        if (Util.isPtr(type)) {
-            funcName = "ptr";
-            if (!type.equals(POINTER)) {
-                String cast = allocReg();
-                genCastCode(cast, type, value, POINTER);
-                value = cast;
-            }
-            type = POINTER;
-        } else if (type.equals(BOOLEAN)) {
-            funcName = INT;
-            String cast = allocReg();
-            genCastCode(cast, type, value, INT);
-            type = INT;
-            value = cast;
-        }
-        add("call void @localvar_set_" + funcName + "(%union.StackEntry* %local_var, i32 " + slot + ", " + type + " " + value + ")");
-    }
-
-    public void genRestoreStackCode() {
-        add("call void @set_sp(%struct.StackFrame* %thrd_stack_reg, %union.StackEntry* %local_var)");
-    }
     // =================================================================================================================
 
     public String allocReg() {
@@ -599,42 +516,60 @@ public class IRBuilder {
                 tmp.append(", i32 ");
             } else if (id instanceof Long) {
                 tmp.append(", i64 ");
-            } else {
-                tmp.append(", ");
             }
             tmp.append(id);
         }
         add(tmp.toString());
     }
 
+    public void getelementptr(String result, String resultType, StackValue ptr, Object... idx) {
+        StringBuilder tmp = new StringBuilder();
+        tmp.append(result);
+        tmp.append(" = getelementptr ");
+        tmp.append(resultType);
+        tmp.append(", ");
+        tmp.append(ptr.fullName());
+        for (Object id : idx) {
+            tmp.append(", ");
+            if (id instanceof Integer) {
+                tmp.append("i32 ");
+                tmp.append(id);
+            } else if (id instanceof Long) {
+                tmp.append("i64 ");
+                tmp.append(id);
+            } else {
+                tmp.append(id);
+            }
+        }
+        add(tmp.toString());
+    }
 
     // <result> = load [volatile] <ty>* <pointer>
-    public void load(String to, String ty, String from) {
+    public void load(String result, String ty, String pointer, RuntimeStack stack) {
         StringBuilder tmp = new StringBuilder();
-        tmp.append(to);
+        tmp.append(result);
         tmp.append(" = load ");
         tmp.append(ty);
         tmp.append(", ");
         tmp.append(ty);
         tmp.append("* ");
-        tmp.append(from);
+        tmp.append(pointer);
         add(tmp.toString());
     }
-//
-
 
     // store [volatile] <ty> <value>, <ty>* <pointer>
-    public void store(String ty, String from, String to) {
+    public void store(String ty, StackValue sv, String result, RuntimeStack stack) {
+        sv = castP1ToP2(stack, sv, ty);
 
         StringBuilder tmp = new StringBuilder();
         tmp.append("store ");
         tmp.append(ty);
         tmp.append(" ");
-        tmp.append(from);
+        tmp.append(sv.toString());
         tmp.append(", ");
         tmp.append(ty);
         tmp.append("* ");
-        tmp.append(to);
+        tmp.append(result);
         add(tmp.toString());
     }
 
