@@ -4,26 +4,31 @@
 An Example Project Show Convert Java Byte Code to LLVM IR assembler , compile standalone executable file   
 
 This project is based on [class2ir](https://github.com/MParygin/class2ir), that based on an old llvm version.   
-So I've changed some instruction syntex, and repaired bug, enhanced functional.   
+So I've changed instruction syntax, refactor to stack mode to fix branch problem, and repaired some bugs.   
 
 ### Currently:
 Generated CentOS_x64 and MacOS executable file, and say "Hello world".    
 
 ### Make:
 1. Enter directory java2llvm/   
-2. Run mac_build.sh or centos_build.sh , then you will get a.out here.   
+2. Run ***mac_build.sh*** or ***centos_build.sh*** , then you will get a.out here.   
 
 ### Requirements:
- CentOS 7.0 x86_64    
  java 1.8    
- llvm-as / llc / clang  5.0    
- make    
+* Centos:    
+  CentOS 7.0 x86_64    
+  llvm-as / llc / clang  5.0    
+  make    
+* MacOS    
+  MacOS 10.15       
+  XCode with cli tools 11.0     
+
 
 ### Known issue:
-* No GC.   
+* No GC ,can add if free time.   
 * Maybe some of java instruction can't work, need test   
-* some of java instruction not implementation , see MV.java    
-* Object memory allocation    
+* some of java instruction behavior simplify , eg. invokevirtual      
+* Object memory allocation , like NO inheirt parent class field.     
 
 ### change log:
 * Add base class java.lang.*, java.io.PrintStream   
