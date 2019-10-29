@@ -15,44 +15,56 @@ public final class LocalVarTable {
 
     List<String> labelsForParse = new ArrayList<>();
     List<String> labelsForUse = new ArrayList<>();
+    int maxSlot = 0;
 
     public void addVar(LocalVar localVar) {
         all.add(localVar);
+        if (maxSlot < localVar.slot) {
+            maxSlot = localVar.slot;
+            if (localVar.signature.equals("D") || localVar.signature.equals("J")) {
+                maxSlot += 1;
+            }
+        }
         //vars.put(localVar.slot, localVar);
+    }
+
+    public int getMaxSlot() {
+        return maxSlot + 1;
     }
 
     public void addParseLabel(String lab) {
         labelsForParse.add(lab);
         //System.out.println("label count " + labelsForParse.size());
     }
+
     public void addUseLabel(String lab) {
         labelsForUse.add(lab);
         //System.out.println("label count " + labelsForParse.size());
     }
 
-    public LocalVar get(int slot,String lab) {
+    public LocalVar get(int slot, String lab) {
 
-        List<LocalVar> list=getBySlot( slot);
+        List<LocalVar> list = getBySlot(slot);
         Collections.sort(list, new Comparator<LocalVar>() {
             @Override
             public int compare(LocalVar o1, LocalVar o2) {
-                if(o1.endAt==o2.startAt){
+                if (o1.endAt == o2.startAt) {
                     throw new RuntimeException("local var sort error,expect not overwrite.");
                 }
-                return o1.endAt-o2.startAt;
+                return o1.endAt - o2.startAt;
             }
         });
 
-        int labIndex=labelsForUse.indexOf(lab);
-        if(labIndex<0){
-            throw new RuntimeException("can't found label: "+lab);
+        int labIndex = labelsForUse.indexOf(lab);
+        if (labIndex < 0) {
+            throw new RuntimeException("can't found label: " + lab);
         }
-        for(LocalVar lv:list){
-            if(labIndex<lv.endAt){
+        for (LocalVar lv : list) {
+            if (labIndex < lv.endAt) {
                 return lv;
             }
         }
-        throw new RuntimeException("can't found localvar by slot: "+slot);
+        throw new RuntimeException("can't found localvar by slot: " + slot);
     }
 
     public List<LocalVar> getAll() {

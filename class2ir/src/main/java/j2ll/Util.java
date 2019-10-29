@@ -14,6 +14,13 @@ import static j2ll.Internals.*;
 public final class Util {
     static public ClassHelper helper;
 
+    public static boolean isPtr(String irType) {
+        if (irType.endsWith("*")) {
+            return true;
+        }
+        return false;
+    }
+
     public static String javaSignature2irType(Resolver resolver, String str) {
 
         if (str.equals("B")) {
@@ -36,7 +43,7 @@ public final class Util {
             return BOOLEAN;
         } else if (str.startsWith("L")) {
             str = str.substring(1, str.length() - 1);
-            return resolver.resolve(str);
+            return resolver.getIrType(str);
         } else if (str.startsWith("[")) {
             return javaArr2irType(resolver, str);
         }
@@ -51,11 +58,11 @@ public final class Util {
         try {
             if (type.endsWith("*")) {
                 return type.substring(0, type.length() - 1);
-            }else if(type.startsWith("%..")){
-                String s = "%"+type.substring(2)+"*";
+            } else if (type.startsWith("%..")) {
+                String s = "%" + type.substring(2) + "*";
                 return s;
             } else {
-                throw new RuntimeException("detype error:"+type);
+                throw new RuntimeException("detype error:" + type);
             }
         } catch (Exception e) {
             e.printStackTrace();
@@ -64,7 +71,7 @@ public final class Util {
     }
 
     public static String javaArr2irType(Resolver resolver, String signature) {
-        resolver.resolve(signature);
+        resolver.getIrType(signature);
         String next = "" + signature.substring(1);
         if (next.startsWith("[")) javaArr2irType(resolver, next);//recur resolve
 
@@ -74,7 +81,7 @@ public final class Util {
     }
 
     public static String javaArr2struct(Resolver resolver, String signature) {
-        resolver.resolve(signature);
+        resolver.getIrType(signature);
         String next = "" + signature.substring(1);
         char nc = signature.charAt(1);
         switch (nc) {
@@ -106,28 +113,40 @@ public final class Util {
         //System.out.println("signatures: \"" + str + "\"");
 
         List<String> result = new ArrayList<>();
-        StringBuilder tmp = new StringBuilder();
-        char[] carr = str.toCharArray();
-        for (int i = 0; i < carr.length; i++) {
-            char c = carr[i];
-            tmp.append(c);
-            if (c == 'S' || c == 'C' || c == 'I' || c == 'J' || c == 'F' || c == 'D') { // todo all java signs
-                result.add(javaSignature2irType(resolver, tmp.toString()));
-                tmp.setLength(0);
+        String sa = str;
+        while (sa.length() > 0) {
+            char c = sa.charAt(0);
+            if (c == 'S' || c == 'B' || c == 'C' || c == 'I' || c == 'J' || c == 'F' || c == 'D') {
+                String tmp = sa.substring(0, 1);
+                result.add(javaSignature2irType(resolver, tmp));
+                sa = sa.substring(1);
             } else if (c == 'L') {
-                String s = "";
-                for (; ; i++) {
-                    c = carr[i];
-                    s += c;
-                    if (c == ';') {
+                int pos = sa.indexOf(';');
+                String tmp = sa.substring(0, pos + 1);
+                result.add(javaSignature2irType(resolver, tmp));
+                sa = sa.substring(pos + 1);
+            } else { //'['
+
+                String tmp = "";
+                //find first not '['
+                for (int i = 0; i < sa.length(); i++) {
+                    c = sa.charAt(i);
+                    tmp += c;
+                    if (sa.charAt(i) != '[') {
                         break;
                     }
                 }
-                result.add(javaSignature2irType(resolver, s));
-                tmp.setLength(0);
+                if (c == 'L') {
+                    int pos = sa.indexOf(';');
+                    tmp = sa.substring(0, pos + 1);
+                }
+                result.add(javaSignature2irType(resolver, tmp));
+                sa = sa.substring(tmp.length());
             }
         }
-        if (tmp.length() > 0) result.add(javaSignature2irType(resolver, tmp.toString()));
+
+
+
         return result;
     }
 

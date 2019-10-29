@@ -13,7 +13,7 @@ public class Internals {
     public static final String LONG = "i64";
     public static final String FLOAT = "float";
     public static final String DOUBLE = "double";
-    public static final String POINTER = "i32*";
+    public static final String POINTER = "i8*";
     public static final String SLOT2 = "SLOT2";
 
     public static int sizeOf(String javaType) {

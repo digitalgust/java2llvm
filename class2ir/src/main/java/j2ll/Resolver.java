@@ -12,7 +12,7 @@ public final class Resolver {
 
     private Set<String> classes = new CopyOnWriteArraySet<>();
 
-    public String resolve(String str) {
+    public String getIrType(String str) {
         if (str.startsWith("L")) {
             int debug = 1;
         }
@@ -23,7 +23,7 @@ public final class Resolver {
         return "%" + str.replace('/', '_') + "*";
     }
 
-    public String resolveStruct(String str) {
+    public String getIrStruct(String str) {
         if (str.startsWith("C")) {
             int debug = 1;
         }

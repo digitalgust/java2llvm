@@ -36,17 +36,17 @@ public class Main {
 
         javaSrc2class(srcPath, classesPath);
 
-//        class2ll(classesPath, llvmPath);
+        class2ll(classesPath, llvmPath);
 
-        conv("java.lang.Object", classesPath, llvmPath);
-        conv("java.io.PrintStream", classesPath, llvmPath);
-        conv("java.lang.System", classesPath, llvmPath);
-        conv("java.lang.Throwable", classesPath, llvmPath);
-        conv("java.lang.NullPointerException", classesPath, llvmPath);
-        conv("java.lang.String", classesPath, llvmPath);
-        conv("java.lang.StringBuilder", classesPath, llvmPath);
-        conv("test.Test", classesPath, llvmPath);
-        conv("test.TestParent", classesPath, llvmPath);
+//        conv("java.lang.Object", classesPath, llvmPath);
+//        conv("java.io.PrintStream", classesPath, llvmPath);
+//        conv("java.lang.System", classesPath, llvmPath);
+//        conv("java.lang.Throwable", classesPath, llvmPath);
+//        conv("java.lang.NullPointerException", classesPath, llvmPath);
+//        conv("java.lang.String", classesPath, llvmPath);
+//        conv("java.lang.StringBuilder", classesPath, llvmPath);
+//        conv("test.Test", classesPath, llvmPath);
+//        conv("test.TestParent", classesPath, llvmPath);
 
         //gen clinit call
         AssistLLVM.genClinits(llvmPath);

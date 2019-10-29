@@ -79,7 +79,7 @@ public class CV extends ClassVisitor {
     public void visitEnd() {
         this.ps.println("; CLASS: " + this.className + " extends " + this.superName);
         this.ps.println();
-        this.ps.println(AssistLLVM.getAssistFuncDeclare());
+        this.ps.println(AssistLLVM.FUNC_DECLARES);
         this.ps.println();
 
         // declares
@@ -98,6 +98,8 @@ public class CV extends ClassVisitor {
             this.ps.println(Util.class2struct(next, name) + " ; use " + name);
         }
 
+        this.ps.println(AssistLLVM.PRE_DEF_TYPE);
+
         // out fields
         this.ps.println("; globals");
         for (JField field : staticFields) {
@@ -109,6 +111,7 @@ public class CV extends ClassVisitor {
                 this.ps.println(Util.static2str(field.className, field.name) + " = internal global " + ir + " zeroinitializer");
             }
         }
+        this.ps.println(AssistLLVM.GLOBAL_VAR_DECLARE);
         this.ps.println();
 
         for (String s : staticStrs.values()) {
