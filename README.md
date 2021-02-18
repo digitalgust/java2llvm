@@ -26,8 +26,8 @@ There are 2 implemention in the project, branch "emu stack ver" and "register ve
 
 
 ### Known issue:
-* No GC ,can add if free time.   
-* Maybe some of java instruction can't work, need test   
+* No GC.   
+* Maybe some of java instruction can't work   
 * some of java instruction behavior simplify , eg. invokevirtual      
 * Object memory allocation , like NO inheirt parent class field.     
 
