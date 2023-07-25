@@ -6,6 +6,8 @@ An Example Project Show Convert Java Byte Code to LLVM IR assembler , then compi
 This project is referenced on [class2ir](https://github.com/MParygin/class2ir), that based on an old llvm version.   
 So I've changed instruction syntax, reimplemention to stack mode to fix branch problem, and repaired some bugs.   
 
+There is a similar project that [tinyj2c](https://github.com/digitalgust/tinyj2c), it convert java bytecode to c source , it impmentated more function for java    
+
 ### Currently:
 Generated CentOS_x64 and MacOS executable file, and say "Hello world".    
 There are 2 implemention in the project, branch "emu stack ver" and "register ver", "register_ver" is fastest, but maybe problem that  branch static analysis, the "emu_stack_ver" is more slow, no branch problem.
